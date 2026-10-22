@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -88,7 +89,7 @@ class LabelReaderService : AccessibilityService() {
             return
         }
         val texts = collect(root)
-        val heard = when (val result = LabelParser.parse(appName, texts)) {
+        val heard = when (val result = LabelParser.parse(appName, texts, resources.displayMetrics.heightPixels)) {
             is LabelParser.Result.Song -> Heard(result.title, result.artist, result.raw, appName, "label")
             else -> null
         }
@@ -102,13 +103,19 @@ class LabelReaderService : AccessibilityService() {
         val queue = ArrayDeque<AccessibilityNodeInfo>()
         queue.add(root)
         var visited = 0
+        val bounds = Rect()
         while (queue.isNotEmpty() && visited < 2500) {
             val node = queue.removeFirst()
             visited++
             if (!node.isVisibleToUser) continue
             val id = node.viewIdResourceName.orEmpty()
-            node.text?.toString()?.takeIf { it.isNotBlank() }?.let { out += ScreenText(it, id, false) }
-            node.contentDescription?.toString()?.takeIf { it.isNotBlank() }?.let { out += ScreenText(it, id, true) }
+            node.getBoundsInScreen(bounds)
+            node.text?.toString()?.takeIf { it.isNotBlank() }?.let {
+                out += ScreenText(it, id, false, bounds.top, bounds.bottom)
+            }
+            node.contentDescription?.toString()?.takeIf { it.isNotBlank() }?.let {
+                out += ScreenText(it, id, true, bounds.top, bounds.bottom)
+            }
             for (i in 0 until node.childCount) node.getChild(i)?.let { queue.add(it) }
         }
         return out

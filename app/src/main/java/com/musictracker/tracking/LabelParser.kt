@@ -3,7 +3,14 @@ package com.musictracker.tracking
 import java.util.Locale
 
 /** One piece of on-screen text, with the id of the view it came from. */
-data class ScreenText(val text: String, val viewId: String, val isDescription: Boolean)
+data class ScreenText(
+    val text: String,
+    val viewId: String,
+    val isDescription: Boolean,
+    /** Where the view sits on screen, in pixels (0 if unknown). */
+    val top: Int = 0,
+    val bottom: Int = 0,
+)
 
 /**
  * Finds the song label in the on-screen text of Reels, Shorts and TikTok.
@@ -58,7 +65,11 @@ object LabelParser {
     private val leadingJunk = Regex("""^[\s\p{So}\p{Cs}:,\-]+""")
     private val trailingJunk = Regex("""[\s,.]*(button|double tap.*|tap to.*)$""", RegexOption.IGNORE_CASE)
 
-    fun parse(appName: String, texts: List<ScreenText>): Result {
+    fun parse(appName: String, texts: List<ScreenText>, screenHeight: Int = 0): Result {
+        if (appName == "Instagram") {
+            val result = instagram(texts, screenHeight)
+            if (result != Result.None) return result
+        }
         var original: Result.OriginalAudio? = null
         for (candidate in candidates(texts)) {
             val cleaned = clean(candidate) ?: continue
@@ -69,6 +80,49 @@ object LabelParser {
             split(appName, cleaned)?.let { return it }
         }
         return original ?: Result.None
+    }
+
+
+    private const val DOT = " \u00B7 "
+    private val mayInclude = Regex("""may include audio from (.+?)\)?\s*$""", RegexOption.IGNORE_CASE)
+
+    /**
+     * Instagram (seen on the Label lab, Oct 2026):
+     * - Reels: an unlabelled description "Artist, Artist · Song title" beside the reel.
+     * - Feed videos: view id "secondary_label" with the same text.
+     * - Creator audio: "username · Original audio", sometimes "(may include audio from Song)".
+     * Several reels can be on screen while scrolling, so the label inside the reel that
+     * fills most of the screen wins; captions end with "…" and are skipped.
+     */
+    private fun instagram(texts: List<ScreenText>, screenHeight: Int): Result {
+        val labels = texts.filter { t ->
+            val s = t.text.trim()
+            val id = t.viewId.substringAfter(":id/")
+            s.contains(DOT) && s.length in 4..220 &&
+                !s.endsWith("\u2026") && !s.endsWith("...") && !s.contains('\n') &&
+                (id.isEmpty() || id == "secondary_label") &&
+                REJECT_ENDINGS.none { s.lowercase(Locale.ROOT).endsWith(it) }
+        }.distinctBy { it.text.trim() }
+        if (labels.isEmpty()) return Result.None
+
+        val reels = texts.filter { it.viewId.endsWith("clips_video_container") && it.bottom > it.top }
+        val main = reels.maxByOrNull { it.bottom - it.top }
+        val inMain = if (main != null) labels.filter { it.top >= main.top && it.bottom <= main.bottom } else labels
+        val pool = inMain.ifEmpty { labels }
+        val middle = if (screenHeight > 0) screenHeight / 2 else 0
+        val pick = pool.minByOrNull { kotlin.math.abs((it.top + it.bottom) / 2 - middle) } ?: return Result.None
+
+        val raw = pick.text.trim()
+        mayInclude.find(raw)?.let { m ->
+            val song = m.groupValues[1].trim().trimEnd(')').trim()
+            if (song.isNotEmpty()) return Result.Song(song, "", raw)
+        }
+        if (isOriginal(raw)) return Result.OriginalAudio(raw)
+        val i = raw.indexOf(DOT)
+        val artist = raw.substring(0, i).trim()
+        val title = raw.substring(i + DOT.length).trim()
+        if (title.isEmpty()) return Result.None
+        return Result.Song(title, artist, raw)
     }
 
     /** Strong candidates first: matching view ids, then music-note text, then keyword text. */
