@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="label_reader_description">Reads the song name that Instagram Reels, YouTube Shorts, TikTok and Facebook Reels show on screen, so Music Tracker can log the songs you hear. It only reads those apps, keeps everything on your phone, and does nothing while tracking is stopped.</string>
+</resources>

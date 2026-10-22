@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@drawable/ic_launcher"
+        android:roundIcon="@drawable/ic_launcher"
+        android:label="Music Tracker"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.MusicTracker">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Detector 1: reads the song label shown on Reels, Shorts and TikTok. -->
+        <service
+            android:name=".tracking.LabelReaderService"
+            android:exported="true"
+            android:label="Music Tracker song reader"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/label_reader_config" />
+        </service>
+
+        <!-- Reads now-playing info from music apps (Spotify, YouTube Music, local players). -->
+        <service
+            android:name=".tracking.NowPlayingListener"
+            android:exported="true"
+            android:label="Music Tracker now playing"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!-- Quick Settings tile: Start/Stop from the notification shade. -->
+        <service
+            android:name=".tracking.ListenTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile"
+            android:label="Music Tracker"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="true" />
+        </service>
+    </application>
+</manifest>
