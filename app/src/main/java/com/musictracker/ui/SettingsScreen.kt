@@ -60,6 +60,7 @@ fun SettingsScreen(vm: MainViewModel, onRequestAudio: () -> Unit) {
     var wifiOnly by remember { mutableStateOf(vm.wifiOnly()) }
     var token by remember { mutableStateOf(vm.geniusToken()) }
     val uriHandler = LocalUriHandler.current
+    val lyricsLog by vm.lyricsLog.collectAsStateWithLifecycle()
 
     val launchers = ExportKind.entries.associateWith { kind ->
         rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(kind.mime)) { uri ->
@@ -152,6 +153,19 @@ fun SettingsScreen(vm: MainViewModel, onRequestAudio: () -> Unit) {
                         modifier = Modifier.weight(1f),
                     )
                     if (!audioRunning) FilledTonalButton(onClick = onRequestAudio) { Text("Allow audio") }
+                }
+                OutlinedButton(onClick = { vm.testLyrics() }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Test now: transcribe the last 15 seconds")
+                }
+                Text("Recent activity", style = MaterialTheme.typography.labelLarge)
+                if (lyricsLog.isEmpty()) {
+                    Text(
+                        "Nothing yet. Play a reel with no song name for 12 seconds, or tap Test now while a song plays.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                lyricsLog.take(12).forEach { line ->
+                    Text(line, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
                 }
                 Text(
                     "Optional, free: a Genius account lets the app search lyrics online. Sign up at genius.com/api-clients, " +

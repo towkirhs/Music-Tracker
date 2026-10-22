@@ -40,19 +40,77 @@ object LyricsRecognizer {
         Prefs.isLyricsOn(context) && ModelManager.isReady(context) &&
             AudioCaptureService.running.value && AudioBuffer.isFlowing()
 
+    /** Why recognition can't run right now, or null if it can. */
+    fun whyNot(context: Context): String? = when {
+        !Prefs.isLyricsOn(context) -> "lyrics recognition is off"
+        !ModelManager.isReady(context) -> "speech model not downloaded yet"
+        !AudioCaptureService.running.value -> "audio not allowed right now (tap Allow audio)"
+        !AudioBuffer.isFlowing() -> "audio permission is on but no sound is arriving"
+        else -> null
+    }
+
+    private fun level(samples: FloatArray) = "%.4f".format(rms(samples))
+
+    /** Transcribes the last 15 seconds right now and logs what it heard (Settings → Test now). */
+    suspend fun testNow(context: Context) = mutex.withLock {
+        withContext(Dispatchers.Default) {
+            whyNot(context)?.let { LyricsLog.add("Test: can't run, $it"); return@withContext }
+            // You switched to this app to tap Test, so skip the quiet seconds at the end.
+            val samples = lastSounding(AudioBuffer.last(30), CLIP_SECONDS)
+            LyricsLog.add("Test: ${samples.size / AudioBuffer.SAMPLE_RATE} s of audio, loudness ${level(samples)}")
+            if (samples.size < AudioBuffer.SAMPLE_RATE * 3 || rms(samples) < 0.004f) {
+                LyricsLog.add("Test: audio is silent. Play a reel with sound, or that app may block audio capture")
+                return@withContext
+            }
+            val start = System.currentTimeMillis()
+            if (!Whisper.ensureLoaded(ModelManager.file(context).path)) {
+                LyricsLog.add("Test: Whisper failed to load the model (delete and re-download it)")
+                return@withContext
+            }
+            val result = Whisper.transcribe(samples)
+            val secs = (System.currentTimeMillis() - start) / 1000.0
+            if (result == null) LyricsLog.add("Test: Whisper failed after %.1f s".format(secs))
+            else LyricsLog.add("Test (%.1f s, %s): \u201C%s\u201D".format(secs, result.first, result.second.take(200)))
+        }
+    }
+
     suspend fun recognize(context: Context, appName: String, reelLabel: String): Outcome = mutex.withLock {
         withContext(Dispatchers.Default) {
-            if (!canRun(context)) return@withContext Outcome.NotReady
+            whyNot(context)?.let {
+                LyricsLog.add("$appName: can't listen, $it")
+                return@withContext Outcome.NotReady
+            }
             val samples = AudioBuffer.last(CLIP_SECONDS)
-            if (samples.size < AudioBuffer.SAMPLE_RATE * 8) return@withContext Outcome.NotReady
-            if (rms(samples) < 0.004f) return@withContext Outcome.NoMatch
-            if (!Whisper.ensureLoaded(ModelManager.file(context).path)) return@withContext Outcome.NotReady
-            val (language, raw) = Whisper.transcribe(samples) ?: return@withContext Outcome.NoMatch
+            if (samples.size < AudioBuffer.SAMPLE_RATE * 8) {
+                LyricsLog.add("$appName: only ${samples.size / AudioBuffer.SAMPLE_RATE} s of audio so far, will retry")
+                return@withContext Outcome.NotReady
+            }
+            if (rms(samples) < 0.004f) {
+                LyricsLog.add("$appName: audio is silent (loudness ${level(samples)}). The app may block audio capture")
+                return@withContext Outcome.NoMatch
+            }
+            val start = System.currentTimeMillis()
+            if (!Whisper.ensureLoaded(ModelManager.file(context).path)) {
+                LyricsLog.add("$appName: Whisper failed to load the model")
+                return@withContext Outcome.NotReady
+            }
+            val transcribed = Whisper.transcribe(samples)
+            val secs = (System.currentTimeMillis() - start) / 1000.0
+            if (transcribed == null) {
+                LyricsLog.add("$appName: Whisper failed")
+                return@withContext Outcome.NoMatch
+            }
+            val (language, raw) = transcribed
             val lyrics = clean(raw)
-            if (lyrics.split(' ').count { it.length > 1 } < 4) return@withContext Outcome.NoMatch
+            LyricsLog.add("$appName: heard in %.1f s (%s): \u201C%s\u201D".format(secs, language, lyrics.take(160)))
+            if (lyrics.split(' ').count { it.length > 1 } < 4) {
+                LyricsLog.add("$appName: too few words to search")
+                return@withContext Outcome.NoMatch
+            }
 
             val titles = AppDatabase.get(context).music().allTitles().map { it.title to it.artist }
             TitleMatcher.best(lyrics, titles)?.let { m ->
+                LyricsLog.add("$appName: matched a title in your library: ${m.title}")
                 return@withContext Outcome.Found(Heard(m.title, m.artist, "lyrics: " + lyrics.take(150), appName, "lyrics"))
             }
 
@@ -61,6 +119,10 @@ object LyricsRecognizer {
             val token = Prefs.geniusToken(context)
             if (token.isNotBlank()) {
                 val guess = runCatching { Genius.identify(token, lyrics) }.getOrNull()
+                LyricsLog.add(
+                    if (guess == null) "$appName: Genius found nothing"
+                    else "$appName: Genius suggests ${guess.hit.title} (${if (guess.confident) "confident" else "unsure"})",
+                )
                 if (guess != null && guess.confident) {
                     return@withContext Outcome.Found(
                         Heard(guess.hit.title, guess.hit.artist, "lyrics: " + lyrics.take(150), appName, "lyrics+genius"),
@@ -71,6 +133,7 @@ object LyricsRecognizer {
                     guessArtist = guess.hit.artist
                 }
             }
+            LyricsLog.add("$appName: not named, saved to History \u2192 Unidentified")
             Repo.addUnidentified(
                 context,
                 Unidentified(
@@ -94,6 +157,14 @@ object LyricsRecognizer {
             line.isNotEmpty() && l !in junkLines && junkPhrases.none { l.contains(it) }
         }
         return lines.joinToString(" ").replace(Regex("""\s+"""), " ").trim()
+    }
+
+    /** The [seconds] of audio before the last moment that had sound. */
+    private fun lastSounding(all: FloatArray, seconds: Int): FloatArray {
+        var end = all.size
+        while (end > 0 && kotlin.math.abs(all[end - 1]) < 0.01f) end--
+        val start = (end - seconds * AudioBuffer.SAMPLE_RATE).coerceAtLeast(0)
+        return all.copyOfRange(start, end)
     }
 
     private fun rms(samples: FloatArray): Float {

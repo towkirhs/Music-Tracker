@@ -13,6 +13,8 @@ import com.musictracker.data.Unidentified
 import com.musictracker.audio.AudioCaptureService
 import com.musictracker.lyrics.Genius
 import com.musictracker.lyrics.ModelManager
+import com.musictracker.lyrics.LyricsLog
+import com.musictracker.lyrics.LyricsRecognizer
 import com.musictracker.export.Exporter
 import com.musictracker.tracking.Prefs
 import kotlinx.coroutines.Dispatchers
@@ -63,6 +65,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun deleteModel() = ModelManager.delete(context)
+
+    val lyricsLog: StateFlow<List<String>> = LyricsLog.entries
+
+    fun testLyrics() {
+        LyricsLog.add("Test: transcribing the last 15 seconds\u2026")
+        viewModelScope.launch { LyricsRecognizer.testNow(context) }
+    }
 
     fun wifiOnly(): Boolean = Prefs.isWifiOnly(context)
     fun setWifiOnly(on: Boolean) = Prefs.setWifiOnly(context, on)

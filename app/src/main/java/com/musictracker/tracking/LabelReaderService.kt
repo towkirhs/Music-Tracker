@@ -14,6 +14,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.content.ContextCompat
 import com.musictracker.data.LabelSample
 import com.musictracker.data.Repo
+import com.musictracker.lyrics.LyricsLog
 import com.musictracker.lyrics.LyricsRecognizer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -106,6 +107,7 @@ class LabelReaderService : AccessibilityService() {
     private var lyricsRunning = false
     private var lyricsDone = false
     private var lyricsHeard: Heard? = null
+    private var loggedWhy = false
 
     private fun lyricsFor(appName: String, texts: List<ScreenText>, result: LabelParser.Result): Heard? {
         val id = LabelParser.unknownReelId(appName, texts, result)
@@ -120,10 +122,20 @@ class LabelReaderService : AccessibilityService() {
             lyricsRunning = false
             lyricsDone = false
             lyricsHeard = null
+            loggedWhy = false
+            LyricsLog.add("$appName: no song name on this reel, waiting 12 s")
         }
         lyricsHeard?.let { return it }
         if (lyricsRunning || lyricsDone || now - unknownSince < 12_000) return null
-        if (!LyricsRecognizer.canRun(this)) return null
+        val why = LyricsRecognizer.whyNot(this)
+        if (why != null) {
+            if (!loggedWhy) {
+                LyricsLog.add("$appName: reel with no song name, but $why")
+                loggedWhy = true
+            }
+            return null
+        }
+        LyricsLog.add("$appName: reel with no song name for 12 s, listening to the lyrics")
         lyricsRunning = true
         val since = unknownSince
         val label = (result as? LabelParser.Result.OriginalAudio)?.raw ?: "$appName reel"
