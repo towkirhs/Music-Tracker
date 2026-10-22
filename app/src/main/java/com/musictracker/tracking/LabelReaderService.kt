@@ -139,7 +139,7 @@ class LabelReaderService : AccessibilityService() {
                         lyricsDone = true
                         lyricsHeard = outcome.heard
                         PlayTracker.observe(
-                            this, PlayTracker.Source.VIDEO, outcome.heard,
+                            this@LabelReaderService, PlayTracker.Source.VIDEO, outcome.heard,
                             alreadyPlayedMs = SystemClock.elapsedRealtime() - since,
                         )
                     }
