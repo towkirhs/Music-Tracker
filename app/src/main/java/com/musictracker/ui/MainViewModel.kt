@@ -9,6 +9,10 @@ import com.musictracker.data.AppDatabase
 import com.musictracker.data.LabelSample
 import com.musictracker.data.PlayRow
 import com.musictracker.data.Repo
+import com.musictracker.data.Unidentified
+import com.musictracker.audio.AudioCaptureService
+import com.musictracker.lyrics.Genius
+import com.musictracker.lyrics.ModelManager
 import com.musictracker.export.Exporter
 import com.musictracker.tracking.Prefs
 import kotlinx.coroutines.Dispatchers
@@ -35,13 +39,55 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val samples: StateFlow<List<LabelSample>> = dao.observeSamples()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    val unidentified: StateFlow<List<Unidentified>> = dao.observeUnidentified()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     val listening: StateFlow<Boolean?> = Prefs.listeningFlow(app)
+    val lyricsOn: StateFlow<Boolean?> = Prefs.lyricsFlow(app)
+    val model: StateFlow<ModelManager.State?> = ModelManager.state(app)
+    val audioRunning: StateFlow<Boolean> = AudioCaptureService.running
     val labOn: StateFlow<Boolean?> = Prefs.labFlow(app)
 
     private val context get() = getApplication<Application>()
 
     fun setListening(on: Boolean) = Prefs.setListening(context, on)
     fun setLab(on: Boolean) = Prefs.setLab(context, on)
+
+    fun setLyrics(on: Boolean) {
+        Prefs.setLyrics(context, on)
+        if (on) ModelManager.download(context)?.let { toast(it) }
+    }
+
+    fun downloadModel(force: Boolean) {
+        ModelManager.download(context, force)?.let { toast(it) }
+    }
+
+    fun deleteModel() = ModelManager.delete(context)
+
+    fun wifiOnly(): Boolean = Prefs.isWifiOnly(context)
+    fun setWifiOnly(on: Boolean) = Prefs.setWifiOnly(context, on)
+
+    fun geniusToken(): String = Prefs.geniusToken(context)
+
+    fun saveGeniusToken(token: String) {
+        Prefs.setGeniusToken(context, token)
+        if (token.isBlank()) {
+            toast("Genius token removed")
+            return
+        }
+        viewModelScope.launch {
+            val ok = withContext(Dispatchers.IO) { Genius.test(token.trim()) }
+            toast(if (ok) "Genius token works" else "Saved, but Genius didn't accept it (check the token and internet)")
+        }
+    }
+
+    fun nameUnidentified(item: Unidentified, title: String, artist: String) {
+        viewModelScope.launch { Repo.nameUnidentified(context, item, title, artist) }
+    }
+
+    fun dismissUnidentified(item: Unidentified) {
+        viewModelScope.launch { Repo.dismissUnidentified(context, item.id) }
+    }
 
     fun setFavourite(trackId: Long, favourite: Boolean) {
         viewModelScope.launch { Repo.setFavourite(context, trackId, favourite) }

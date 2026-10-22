@@ -64,7 +64,7 @@ object PlayTracker {
     private val lastEnded = mutableMapOf<Source, Ended>()
 
     @Synchronized
-    fun observe(context: Context, source: Source, heard: Heard?) {
+    fun observe(context: Context, source: Source, heard: Heard?, alreadyPlayedMs: Long = 0) {
         appContext = context.applicationContext
         if (!Prefs.isListening(context) || heard == null || heard.title.isBlank()) {
             end(source)
@@ -87,8 +87,10 @@ object PlayTracker {
             val old = previous!!.session
             Session(key, old.heard, old.startedAtWall, old.playedMs, now, old.record)
         } else {
-            Session(key, heard, System.currentTimeMillis(), 0, now, Record())
+            // alreadyPlayedMs: the song was recognised late (by its lyrics), so count the time before that too.
+            Session(key, heard, System.currentTimeMillis() - alreadyPlayedMs, alreadyPlayedMs, now, Record())
         }
+        current[source]?.let { if (it.playedMs >= MIN_PLAY_MS) persist(it, final = false) }
     }
 
     /** Stops the current song on one channel (screen off, app closed, music paused). */

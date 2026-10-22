@@ -84,4 +84,23 @@ object Repo {
         dao.insertSamples(samples)
         dao.trimSamples()
     }
+
+    suspend fun addUnidentified(context: Context, item: Unidentified) {
+        val dao = dao(context)
+        dao.insertUnidentified(item)
+        dao.trimUnidentified()
+    }
+
+    /** Names an unidentified clip: logs it as a play and removes it from the inbox. */
+    suspend fun nameUnidentified(context: Context, item: Unidentified, title: String, artist: String) {
+        addPlay(
+            context, title.trim(), artist.trim(), "named by you: " + item.lyrics.take(120),
+            item.sourceApp, "you", item.capturedAt, PlayTracker_MIN_MS,
+        )
+        dao(context).deleteUnidentified(item.id)
+    }
+
+    suspend fun dismissUnidentified(context: Context, id: Long) = dao(context).deleteUnidentified(id)
+
+    private const val PlayTracker_MIN_MS = 15_000L
 }

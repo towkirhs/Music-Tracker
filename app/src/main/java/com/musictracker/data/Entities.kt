@@ -43,6 +43,23 @@ data class LabelSample(
     val content: String,
 )
 
+/**
+ * A song the app heard but couldn't name: the transcribed lyrics and any Genius guess
+ * are kept so you can name it in a second from History → Unidentified.
+ */
+@Entity(tableName = "unidentified")
+data class Unidentified(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val capturedAt: Long,
+    val sourceApp: String,
+    /** What was on screen, e.g. "creator · Original audio". */
+    val reelLabel: String,
+    val lyrics: String,
+    val language: String,
+    val guessTitle: String,
+    val guessArtist: String,
+)
+
 /** A play joined with its track, which is what every screen shows. */
 data class PlayRow(
     val playId: Long,
@@ -57,3 +74,5 @@ data class PlayRow(
     val isFavourite: Boolean,
     val firstSeen: Long,
 )
+
+data class TitleArtist(val title: String, val artist: String)

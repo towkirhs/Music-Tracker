@@ -17,6 +17,18 @@ android {
         val buildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0
         versionCode = 10 + buildNumber
         versionName = "0.$buildNumber"
+
+        // Whisper is built for 64-bit ARM only (the Nothing Phone (2a) and almost all current phones).
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     // One fixed key for every build, so a new APK installs over the old one and keeps your library.

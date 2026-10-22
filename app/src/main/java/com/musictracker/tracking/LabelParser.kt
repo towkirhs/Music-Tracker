@@ -125,6 +125,25 @@ object LabelParser {
         return Result.Song(title, artist, raw)
     }
 
+    /**
+     * An id for the reel on screen when it has no song name, so lyrics recognition runs once per reel.
+     * Instagram: the reel filling the screen ("Reel by …") plus its like count, which differs per reel.
+     * Other apps: the "original sound - creator" label.
+     */
+    fun unknownReelId(appName: String, texts: List<ScreenText>, result: Result): String? {
+        if (appName == "Instagram") {
+            val main = texts.filter { it.viewId.endsWith("clips_video_container") && it.bottom > it.top }
+                .maxByOrNull { it.bottom - it.top }
+            if (main != null) {
+                val likes = texts.firstOrNull {
+                    it.viewId.endsWith("like_count") && it.top >= main.top && it.bottom <= main.bottom
+                }?.text.orEmpty()
+                return "ig|" + main.text + "|" + likes
+            }
+        }
+        return (result as? Result.OriginalAudio)?.let { appName + "|" + it.raw }
+    }
+
     /** Strong candidates first: matching view ids, then music-note text, then keyword text. */
     private fun candidates(texts: List<ScreenText>): List<String> {
         val byId = mutableListOf<String>()

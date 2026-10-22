@@ -14,6 +14,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.content.ContextCompat
 import com.musictracker.data.LabelSample
 import com.musictracker.data.Repo
+import com.musictracker.lyrics.LyricsRecognizer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -89,12 +90,65 @@ class LabelReaderService : AccessibilityService() {
             return
         }
         val texts = collect(root)
-        val heard = when (val result = LabelParser.parse(appName, texts, resources.displayMetrics.heightPixels)) {
+        val result = LabelParser.parse(appName, texts, resources.displayMetrics.heightPixels)
+        var heard = when (result) {
             is LabelParser.Result.Song -> Heard(result.title, result.artist, result.raw, appName, "label")
             else -> null
         }
+        if (heard == null && Prefs.isLyricsOn(this)) heard = lyricsFor(appName, texts, result)
         PlayTracker.observe(this, PlayTracker.Source.VIDEO, heard)
         if (Prefs.isLabOn(this)) saveLabSample(appName, texts)
+    }
+
+    // Lyrics recognition for reels with no song name: once per reel, after 12 seconds.
+    private var unknownId: String? = null
+    private var unknownSince = 0L
+    private var lyricsRunning = false
+    private var lyricsDone = false
+    private var lyricsHeard: Heard? = null
+
+    private fun lyricsFor(appName: String, texts: List<ScreenText>, result: LabelParser.Result): Heard? {
+        val id = LabelParser.unknownReelId(appName, texts, result)
+        if (id == null) {
+            unknownId = null
+            return null
+        }
+        val now = SystemClock.elapsedRealtime()
+        if (id != unknownId) {
+            unknownId = id
+            unknownSince = now
+            lyricsRunning = false
+            lyricsDone = false
+            lyricsHeard = null
+        }
+        lyricsHeard?.let { return it }
+        if (lyricsRunning || lyricsDone || now - unknownSince < 12_000) return null
+        if (!LyricsRecognizer.canRun(this)) return null
+        lyricsRunning = true
+        val since = unknownSince
+        val label = (result as? LabelParser.Result.OriginalAudio)?.raw ?: "$appName reel"
+        val context = applicationContext
+        scope.launch {
+            val outcome = runCatching { LyricsRecognizer.recognize(context, appName, label) }
+                .getOrDefault(LyricsRecognizer.Outcome.NotReady)
+            handler.post {
+                if (unknownId != id) return@post
+                lyricsRunning = false
+                when (outcome) {
+                    is LyricsRecognizer.Outcome.Found -> {
+                        lyricsDone = true
+                        lyricsHeard = outcome.heard
+                        PlayTracker.observe(
+                            this, PlayTracker.Source.VIDEO, outcome.heard,
+                            alreadyPlayedMs = SystemClock.elapsedRealtime() - since,
+                        )
+                    }
+                    LyricsRecognizer.Outcome.NoMatch -> lyricsDone = true
+                    LyricsRecognizer.Outcome.NotReady -> unknownSince = SystemClock.elapsedRealtime()
+                }
+            }
+        }
+        return null
     }
 
     /** Walks the visible views and collects their text and descriptions. */

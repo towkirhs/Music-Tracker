@@ -57,7 +57,7 @@ enum class Tab(val label: String, val icon: ImageVector) {
 }
 
 @Composable
-fun MusicTrackerApp(vm: MainViewModel = viewModel()) {
+fun MusicTrackerApp(onRequestAudio: () -> Unit, vm: MainViewModel = viewModel()) {
     var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
     var openSong by remember { mutableStateOf<Long?>(null) }
     val plays by vm.plays.collectAsStateWithLifecycle()
@@ -81,11 +81,11 @@ fun MusicTrackerApp(vm: MainViewModel = viewModel()) {
     ) { padding ->
         Box(Modifier.padding(padding)) {
             when (tab) {
-                Tab.HOME -> HomeScreen(vm, plays, onOpenSong = { openSong = it }, onGoSettings = { tab = Tab.SETTINGS })
+                Tab.HOME -> HomeScreen(vm, plays, onOpenSong = { openSong = it }, onGoSettings = { tab = Tab.SETTINGS }, onRequestAudio = onRequestAudio)
                 Tab.LIBRARY -> LibraryScreen(plays, onOpenSong = { openSong = it })
                 Tab.STATS -> StatsScreen(plays, onOpenSong = { openSong = it })
                 Tab.HISTORY -> HistoryScreen(vm, plays, onOpenSong = { openSong = it })
-                Tab.SETTINGS -> SettingsScreen(vm)
+                Tab.SETTINGS -> SettingsScreen(vm, onRequestAudio = onRequestAudio)
             }
         }
     }

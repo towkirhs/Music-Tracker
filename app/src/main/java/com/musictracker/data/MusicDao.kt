@@ -94,6 +94,23 @@ interface MusicDao {
     @Query("DELETE FROM tracks")
     suspend fun clearTracks()
 
+    // Unidentified inbox
+
+    @Insert
+    suspend fun insertUnidentified(item: Unidentified): Long
+
+    @Query("SELECT * FROM unidentified ORDER BY capturedAt DESC")
+    fun observeUnidentified(): Flow<List<Unidentified>>
+
+    @Query("DELETE FROM unidentified WHERE id = :id")
+    suspend fun deleteUnidentified(id: Long)
+
+    @Query("DELETE FROM unidentified WHERE id NOT IN (SELECT id FROM unidentified ORDER BY capturedAt DESC LIMIT 500)")
+    suspend fun trimUnidentified()
+
+    @Query("SELECT title, artist FROM tracks")
+    suspend fun allTitles(): List<TitleArtist>
+
     // Label lab
 
     @Insert

@@ -36,9 +36,22 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.musictracker.data.PlayRow
 
 @Composable
-fun HomeScreen(vm: MainViewModel, plays: List<PlayRow>, onOpenSong: (Long) -> Unit, onGoSettings: () -> Unit) {
+fun HomeScreen(
+    vm: MainViewModel,
+    plays: List<PlayRow>,
+    onOpenSong: (Long) -> Unit,
+    onGoSettings: () -> Unit,
+    onRequestAudio: () -> Unit,
+) {
     val context = LocalContext.current
     val listening by vm.listening.collectAsStateWithLifecycle()
+    val lyricsOn by vm.lyricsOn.collectAsStateWithLifecycle()
+    val model by vm.model.collectAsStateWithLifecycle()
+    val audioRunning by vm.audioRunning.collectAsStateWithLifecycle()
+    val toggle: (Boolean) -> Unit = { turnOn ->
+        vm.setListening(turnOn)
+        if (turnOn && lyricsOn == true && model is com.musictracker.lyrics.ModelManager.State.Ready) onRequestAudio()
+    }
     var refresh by remember { mutableIntStateOf(0) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { refresh++ }
     val readerOn = remember(refresh) { Setup.labelReaderOn(context) }
@@ -59,7 +72,7 @@ fun HomeScreen(vm: MainViewModel, plays: List<PlayRow>, onOpenSong: (Long) -> Un
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { vm.setListening(!on) },
+                    .clickable { toggle(!on) },
             ) {
                 Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -74,7 +87,21 @@ fun HomeScreen(vm: MainViewModel, plays: List<PlayRow>, onOpenSong: (Long) -> Un
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     }
-                    Switch(checked = on, onCheckedChange = { vm.setListening(it) })
+                    Switch(checked = on, onCheckedChange = { toggle(it) })
+                }
+            }
+        }
+        if (on && lyricsOn == true && model is com.musictracker.lyrics.ModelManager.State.Ready && !audioRunning) {
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text(
+                            "Lyrics recognition is paused. Allow audio so covers and \"Original audio\" reels can be named. " +
+                                "Android asks again after the screen locks.",
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                        Button(onClick = onRequestAudio, modifier = Modifier.padding(top = 8.dp)) { Text("Allow audio") }
+                    }
                 }
             }
         }

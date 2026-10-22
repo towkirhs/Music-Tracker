@@ -17,6 +17,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
@@ -31,15 +33,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.musictracker.BuildConfig
+import com.musictracker.lyrics.ModelManager
 
 @Composable
-fun SettingsScreen(vm: MainViewModel) {
+fun SettingsScreen(vm: MainViewModel, onRequestAudio: () -> Unit) {
     val context = LocalContext.current
     var refresh by remember { mutableIntStateOf(0) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { refresh++ }
@@ -50,6 +54,12 @@ fun SettingsScreen(vm: MainViewModel) {
     val samples by vm.samples.collectAsStateWithLifecycle()
     var showSamples by remember { mutableStateOf(false) }
     var restoreUri by remember { mutableStateOf<Uri?>(null) }
+    val lyricsOn by vm.lyricsOn.collectAsStateWithLifecycle()
+    val model by vm.model.collectAsStateWithLifecycle()
+    val audioRunning by vm.audioRunning.collectAsStateWithLifecycle()
+    var wifiOnly by remember { mutableStateOf(vm.wifiOnly()) }
+    var token by remember { mutableStateOf(vm.geniusToken()) }
+    val uriHandler = LocalUriHandler.current
 
     val launchers = ExportKind.entries.associateWith { kind ->
         rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(kind.mime)) { uri ->
@@ -92,6 +102,71 @@ fun SettingsScreen(vm: MainViewModel) {
                         "Quick Settings to start or stop without opening the app.",
                     style = MaterialTheme.typography.bodySmall,
                 )
+            }
+        }
+        item {
+            Group("Recognise songs by lyrics") {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Name covers and \"Original audio\" reels")
+                        Text(
+                            "When a reel has no song name, the app listens to 15 seconds, turns the singing into " +
+                                "text on your phone (Whisper), and looks for the song. Free and offline; Genius is optional.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Switch(checked = lyricsOn == true, onCheckedChange = { vm.setLyrics(it) })
+                }
+                when (val m = model) {
+                    is ModelManager.State.Ready -> Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("\u2713 Speech model ready (57 MB)", modifier = Modifier.weight(1f))
+                        TextButton(onClick = { vm.deleteModel() }) { Text("Delete") }
+                    }
+                    is ModelManager.State.Downloading -> Column {
+                        Text("Downloading speech model: ${m.percent}%")
+                        LinearProgressIndicator(
+                            progress = { m.percent / 100f },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                        )
+                    }
+                    is ModelManager.State.Failed -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(m.reason, style = MaterialTheme.typography.bodySmall)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilledTonalButton(onClick = { vm.downloadModel(force = false) }) { Text("Try again") }
+                            TextButton(onClick = { vm.downloadModel(force = true) }) { Text("Use mobile data") }
+                        }
+                    }
+                    else -> FilledTonalButton(onClick = { vm.downloadModel(force = false) }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Download speech model (57 MB, once)")
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Download only on Wi-Fi", modifier = Modifier.weight(1f))
+                    Switch(checked = wifiOnly, onCheckedChange = { wifiOnly = it; vm.setWifiOnly(it) })
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        if (audioRunning) "\u2713 Audio: listening" else "\u2715 Audio: not allowed right now",
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (!audioRunning) FilledTonalButton(onClick = onRequestAudio) { Text("Allow audio") }
+                }
+                Text(
+                    "Optional, free: a Genius account lets the app search lyrics online. Sign up at genius.com/api-clients, " +
+                        "create an API client (any name and website), then copy its Client Access Token here.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                TextButton(onClick = { uriHandler.openUri("https://genius.com/api-clients") }) { Text("Open genius.com/api-clients") }
+                OutlinedTextField(
+                    value = token,
+                    onValueChange = { token = it },
+                    label = { Text("Genius Client Access Token") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                FilledTonalButton(onClick = { vm.saveGeniusToken(token) }) { Text("Save and test token") }
             }
         }
         item {
