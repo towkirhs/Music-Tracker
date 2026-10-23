@@ -66,8 +66,8 @@ object LabelParser {
     private val trailingJunk = Regex("""[\s,.]*(button|double tap.*|tap to.*)$""", RegexOption.IGNORE_CASE)
 
     fun parse(appName: String, texts: List<ScreenText>, screenHeight: Int = 0): Result {
-        if (appName == "Instagram") {
-            val result = instagram(texts, screenHeight)
+        if (appName == "Instagram" || appName == "Facebook") {
+            val result = instagram(texts, screenHeight, appName == "Facebook")
             if (result != Result.None) return result
         }
         var original: Result.OriginalAudio? = null
@@ -94,7 +94,11 @@ object LabelParser {
      * Several reels can be on screen while scrolling, so the label inside the reel that
      * fills most of the screen wins; captions end with "…" and are skipped.
      */
-    private fun instagram(texts: List<ScreenText>, screenHeight: Int): Result {
+    private fun instagram(texts: List<ScreenText>, screenHeight: Int, facebook: Boolean = false): Result {
+        // Facebook Reels use the same "Artist · Song" description (seen on the Label lab, Oct 2026),
+        // next to a "View <creator>'s reels" button. Only read it on the Reels screen, not the feed.
+        val reelAnchors = if (facebook) texts.filter { it.text.startsWith("View ") && it.text.endsWith("'s reels") } else emptyList()
+        if (facebook && reelAnchors.isEmpty()) return Result.None
         val labels = texts.filter { t ->
             val s = t.text.trim()
             val id = t.viewId.substringAfter(":id/")
@@ -110,7 +114,10 @@ object LabelParser {
         val inMain = if (main != null) labels.filter { it.top >= main.top && it.bottom <= main.bottom } else labels
         val pool = inMain.ifEmpty { labels }
         val middle = if (screenHeight > 0) screenHeight / 2 else 0
-        val pick = pool.minByOrNull { kotlin.math.abs((it.top + it.bottom) / 2 - middle) } ?: return Result.None
+        // Facebook: the label sits just below the reel's "View …'s reels" button.
+        val anchor = reelAnchors.minByOrNull { kotlin.math.abs((it.top + it.bottom) / 2 - middle) }
+        val target = anchor?.let { (it.top + it.bottom) / 2 } ?: middle
+        val pick = pool.minByOrNull { kotlin.math.abs((it.top + it.bottom) / 2 - target) } ?: return Result.None
 
         val raw = pick.text.trim()
         mayInclude.find(raw)?.let { m ->
