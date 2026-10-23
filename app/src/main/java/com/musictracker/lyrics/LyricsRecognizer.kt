@@ -74,14 +74,24 @@ object LyricsRecognizer {
         }
     }
 
-    suspend fun recognize(context: Context, appName: String, reelLabel: String): Outcome = mutex.withLock {
+    /**
+     * [seconds]: how much audio to use (only this reel's, since it started).
+     * [lastTry]: the last try for this reel; only then is an unnamed song saved to the inbox.
+     */
+    suspend fun recognize(
+        context: Context,
+        appName: String,
+        reelLabel: String,
+        seconds: Int,
+        lastTry: Boolean,
+    ): Outcome = mutex.withLock {
         withContext(Dispatchers.Default) {
             whyNot(context)?.let {
                 LyricsLog.add("$appName: can't listen, $it")
                 return@withContext Outcome.NotReady
             }
-            val samples = AudioBuffer.last(CLIP_SECONDS)
-            if (samples.size < AudioBuffer.SAMPLE_RATE * 8) {
+            val samples = AudioBuffer.last(seconds)
+            if (samples.size < AudioBuffer.SAMPLE_RATE * 4) {
                 LyricsLog.add("$appName: only ${samples.size / AudioBuffer.SAMPLE_RATE} s of audio so far, will retry")
                 return@withContext Outcome.NotReady
             }
@@ -104,7 +114,7 @@ object LyricsRecognizer {
             val lyrics = clean(raw)
             LyricsLog.add("$appName: heard in %.1f s (%s): \u201C%s\u201D".format(secs, language, lyrics.take(160)))
             if (lyrics.split(' ').count { it.length > 1 } < 4) {
-                LyricsLog.add("$appName: too few words to search")
+                LyricsLog.add(if (lastTry) "$appName: too few words to search" else "$appName: too few words yet, trying again at 16 s")
                 return@withContext Outcome.NoMatch
             }
 
@@ -132,6 +142,10 @@ object LyricsRecognizer {
                     guessTitle = guess.hit.title
                     guessArtist = guess.hit.artist
                 }
+            }
+            if (!lastTry) {
+                LyricsLog.add("$appName: no match yet, trying again at 16 s with more audio")
+                return@withContext Outcome.NoMatch
             }
             LyricsLog.add("$appName: not named, saved to History \u2192 Unidentified")
             Repo.addUnidentified(

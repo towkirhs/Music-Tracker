@@ -29,6 +29,10 @@ import kotlinx.coroutines.launch
 class LabelReaderService : AccessibilityService() {
 
     private val handler = Handler(Looper.getMainLooper())
+    private companion object {
+        const val FIRST_TRY_MS = 8_000L
+        const val SECOND_TRY_MS = 16_000L
+    }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var lastScan = 0L
     private var scanPending = false
@@ -101,11 +105,13 @@ class LabelReaderService : AccessibilityService() {
         if (Prefs.isLabOn(this)) saveLabSample(appName, texts)
     }
 
-    // Lyrics recognition for reels with no song name: once per reel, after 12 seconds.
+    // Lyrics recognition for reels with no song name: starts listening at once, first try after
+    // 8 seconds of this reel's audio, a second, longer try at 16 seconds if the first finds nothing.
     private var unknownId: String? = null
     private var unknownSince = 0L
     private var lyricsRunning = false
     private var lyricsDone = false
+    private var attempts = 0
     private var lyricsHeard: Heard? = null
     private var loggedWhy = false
 
@@ -121,27 +127,33 @@ class LabelReaderService : AccessibilityService() {
             unknownSince = now
             lyricsRunning = false
             lyricsDone = false
+            attempts = 0
             lyricsHeard = null
             loggedWhy = false
-            LyricsLog.add("$appName: no song name on this reel, waiting 12 s")
+            LyricsLog.add("$appName: no song name on this reel, listening")
         }
         lyricsHeard?.let { return it }
-        if (lyricsRunning || lyricsDone || now - unknownSince < 12_000) return null
+        if (lyricsRunning || lyricsDone) return null
+        val elapsed = now - unknownSince
+        val dueAt = if (attempts == 0) FIRST_TRY_MS else SECOND_TRY_MS
+        if (elapsed < dueAt) return null
         val why = LyricsRecognizer.whyNot(this)
         if (why != null) {
             if (!loggedWhy) {
-                LyricsLog.add("$appName: reel with no song name, but $why")
+                LyricsLog.add("$appName: can't listen, $why")
                 loggedWhy = true
             }
             return null
         }
-        LyricsLog.add("$appName: reel with no song name for 12 s, listening to the lyrics")
         lyricsRunning = true
+        attempts++
+        val lastTry = attempts >= 2
+        val seconds = ((elapsed / 1000).toInt()).coerceIn(5, 15)
         val since = unknownSince
         val label = (result as? LabelParser.Result.OriginalAudio)?.raw ?: "$appName reel"
         val context = applicationContext
         scope.launch {
-            val outcome = runCatching { LyricsRecognizer.recognize(context, appName, label) }
+            val outcome = runCatching { LyricsRecognizer.recognize(context, appName, label, seconds, lastTry) }
                 .getOrDefault(LyricsRecognizer.Outcome.NotReady)
             handler.post {
                 if (unknownId != id) return@post
@@ -155,8 +167,8 @@ class LabelReaderService : AccessibilityService() {
                             alreadyPlayedMs = SystemClock.elapsedRealtime() - since,
                         )
                     }
-                    LyricsRecognizer.Outcome.NoMatch -> lyricsDone = true
-                    LyricsRecognizer.Outcome.NotReady -> unknownSince = SystemClock.elapsedRealtime()
+                    LyricsRecognizer.Outcome.NoMatch -> { if (lastTry) lyricsDone = true }
+                    LyricsRecognizer.Outcome.NotReady -> { attempts-- }
                 }
             }
         }
