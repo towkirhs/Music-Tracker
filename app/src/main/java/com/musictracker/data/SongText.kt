@@ -39,4 +39,13 @@ object SongText {
     }
 
     val LANGUAGES = listOf("Bangla", "Hindi", "English/other")
+
+    /**
+     * Free YouTube link for a song: a search for "title artist". Needs no API key or account,
+     * and opens in the YouTube app when it is installed, otherwise in the browser.
+     */
+    fun youtubeUrl(title: String, artist: String): String {
+        val query = listOf(title, artist).filter { it.isNotBlank() }.joinToString(" ")
+        return "https://www.youtube.com/results?search_query=" + java.net.URLEncoder.encode(query, "UTF-8")
+    }
 }

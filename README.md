@@ -27,6 +27,10 @@ Every push to `main` builds a new APK. Download the latest one from **Releases**
 
 Each app shows the song label differently and changes it with updates. Turn on **Settings → Label lab**, scroll some Reels for a few minutes, then **Save CSV** and share it: the reading rules in `LabelParser.kt` can then be fixed for your phone.
 
+## YouTube links
+
+Tap a song, then "Open on YouTube", to search for it on YouTube (opens the YouTube app, or the browser if it isn't installed). The links are plain free YouTube searches, with no API key or account, and they are also included in the songs CSV and the HTML report.
+
 ## Exports
 
 Settings → Export and backup: song list and full history as CSV (opens in Excel), an HTML report (print to PDF from Chrome), and a backup file you can restore later. Everything stays on the phone.

@@ -2,6 +2,9 @@
 
 package com.musictracker.ui
 
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,6 +27,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.musictracker.data.PlayRow
 import com.musictracker.data.SongText
@@ -37,6 +41,7 @@ fun SongDialog(trackId: Long, plays: List<PlayRow>, vm: MainViewModel, onDismiss
         return
     }
     val first = rows.first()
+    val context = LocalContext.current
     var title by remember(trackId) { mutableStateOf(first.title) }
     var artist by remember(trackId) { mutableStateOf(first.artist) }
     var language by remember(trackId) { mutableStateOf(first.language) }
@@ -60,6 +65,19 @@ fun SongDialog(trackId: Long, plays: List<PlayRow>, vm: MainViewModel, onDismiss
                 )
                 OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Title") }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = artist, onValueChange = { artist = it }, label = { Text("Artist") }, modifier = Modifier.fillMaxWidth())
+                OutlinedButton(
+                    onClick = {
+                        val url = SongText.youtubeUrl(title, artist)
+                        try {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                        } catch (_: Exception) {
+                            Toast.makeText(context, "No app or browser found to open YouTube", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("▶ Open on YouTube") }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { val t = title; title = artist; artist = t }) { Text("Swap") }
                     OutlinedButton(onClick = { vm.setFavourite(trackId, !first.isFavourite) }) {

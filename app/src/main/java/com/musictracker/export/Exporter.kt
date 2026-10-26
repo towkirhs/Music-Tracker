@@ -6,6 +6,7 @@ import androidx.room.withTransaction
 import com.musictracker.data.AppDatabase
 import com.musictracker.data.Play
 import com.musictracker.data.PlayRow
+import com.musictracker.data.SongText
 import com.musictracker.data.Track
 import com.musictracker.ui.Range
 import com.musictracker.ui.Stats
@@ -49,13 +50,14 @@ object Exporter {
         val rows = AppDatabase.get(context).music().allPlayRows()
         val songs = Stats.songs(rows, Range.ALL).sortedByDescending { it.plays }
         val sb = StringBuilder("﻿")
-        sb.append("Title,Artist,Language,Plays,Minutes listened,First heard,Last heard,Most heard on,Favourite score,Hearted\n")
+        sb.append("Title,Artist,Language,Plays,Minutes listened,First heard,Last heard,Most heard on,Favourite score,Hearted,YouTube link\n")
         songs.forEach {
             sb.append(
                 listOf(
                     it.title, it.artist, it.language, it.plays.toString(), (it.ms / 60_000).toString(),
                     fmt(it.firstSeen), fmt(it.lastPlayed), it.topSource, it.score.toString(),
                     if (it.isFavourite) "yes" else "",
+                    SongText.youtubeUrl(it.title, it.artist),
                 ).joinToString(",") { cell -> csvCell(cell) },
             ).append('\n')
         }
@@ -81,9 +83,10 @@ object Exporter {
             append("<p><b>${rows.size}</b> plays · <b>${songs.size}</b> songs · <b>${artists.size}</b> artists · <b>${esc(Stats.duration(total))}</b> listened</p>")
             append("<h2>Languages</h2><table><tr><th>Language</th><th>Plays</th><th>Time</th></tr>")
             languages.forEach { append("<tr><td>${esc(it.name)}</td><td class='n'>${it.plays}</td><td class='n'>${esc(Stats.duration(it.ms))}</td></tr>") }
-            append("</table><h2>Top songs</h2><table><tr><th>#</th><th>Song</th><th>Artist</th><th>Plays</th><th>Time</th></tr>")
+            append("</table><h2>Top songs</h2><table><tr><th>#</th><th>Song</th><th>Artist</th><th>Plays</th><th>Time</th><th>YouTube</th></tr>")
             songs.take(100).forEachIndexed { i, s ->
-                append("<tr><td>${i + 1}</td><td>${esc(s.title)}</td><td>${esc(s.artist)}</td><td class='n'>${s.plays}</td><td class='n'>${esc(Stats.duration(s.ms))}</td></tr>")
+                val yt = esc(SongText.youtubeUrl(s.title, s.artist))
+                append("<tr><td>${i + 1}</td><td>${esc(s.title)}</td><td>${esc(s.artist)}</td><td class='n'>${s.plays}</td><td class='n'>${esc(Stats.duration(s.ms))}</td><td><a href='$yt'>Watch</a></td></tr>")
             }
             append("</table><h2>Top artists</h2><table><tr><th>Artist</th><th>Songs</th><th>Plays</th><th>Time</th></tr>")
             artists.take(50).forEach {
