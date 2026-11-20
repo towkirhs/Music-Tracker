@@ -124,8 +124,10 @@ object YtMusic {
             ?: find(json, "nextContinuationData").firstOrNull()?.optString("continuation")?.ifBlank { null }
 
     /** The largest thumbnail (the last one listed). */
-    private fun lastThumbnail(holder: JSONObject?): String? =
-        find(holder ?: return null, "thumbnails").firstOrNull()?.optString("url")?.ifBlank { null }
+    private fun lastThumbnail(holder: JSONObject?): String? {
+        if (holder == null) return null
+        return find(holder, "thumbnails").firstOrNull()?.optString("url")?.ifBlank { null }
+    }
 
     private fun clockToMs(text: String): Long {
         val parts = text.split(":").mapNotNull { it.toLongOrNull() }
