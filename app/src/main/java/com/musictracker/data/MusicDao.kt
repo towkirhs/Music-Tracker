@@ -106,6 +106,23 @@ interface MusicDao {
     @Query("SELECT language FROM tracks WHERE artist = :artist AND id != :exceptId AND language != 'English/other'")
     suspend fun languagesOfArtist(artist: String, exceptId: Long): List<String>
 
+    // Last.fm scrobbling and imports
+
+    /** Plays to send to Last.fm: at least 30 seconds, artist known (Last.fm needs one), not imported. */
+    @Query(
+        """
+        SELECT p.startedAt AS startedAt, t.title AS title, t.artist AS artist
+        FROM plays p JOIN tracks t ON t.id = p.trackId
+        WHERE p.startedAt > :after AND p.playedMs >= 30000 AND t.artist != '' AND p.detector NOT LIKE 'import%'
+        ORDER BY p.startedAt ASC LIMIT :limit
+        """,
+    )
+    suspend fun playsToScrobble(after: Long, limit: Int): List<ScrobbleRow>
+
+    /** Plays of this song within a window, to skip duplicates when importing history. */
+    @Query("SELECT COUNT(*) FROM plays WHERE trackId = :trackId AND startedAt BETWEEN :from AND :to")
+    suspend fun countPlaysBetween(trackId: Long, from: Long, to: Long): Int
+
     // Restore from a backup file
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

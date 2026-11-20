@@ -52,6 +52,19 @@ object Repo {
         )
     }
 
+    /**
+     * Adds a play imported from Last.fm, Spotify or YouTube Music, unless this song already has a play
+     * within 2 minutes of it (counted here, or imported before). Returns true when added.
+     */
+    suspend fun importPlay(context: Context, title: String, artist: String, sourceApp: String, detector: String, startedAt: Long, playedMs: Long): Boolean {
+        val dao = dao(context)
+        dao.trackByKey(SongText.key(title, artist))?.let { track ->
+            if (dao.countPlaysBetween(track.id, startedAt - 120_000, startedAt + 120_000) > 0) return false
+        }
+        addPlay(context, title, artist, "imported from $sourceApp", sourceApp, detector, startedAt, playedMs)
+        return true
+    }
+
     suspend fun updatePlayedMs(context: Context, playId: Long, playedMs: Long) =
         dao(context).setPlayedMs(playId, playedMs)
 

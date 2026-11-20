@@ -109,3 +109,5 @@ data class PlayRow(
 )
 
 data class TitleArtist(val title: String, val artist: String)
+
+data class ScrobbleRow(val startedAt: Long, val title: String, val artist: String)

@@ -84,6 +84,46 @@ object Prefs {
     fun setLastFm(context: Context, key: String, user: String) =
         prefs(context).edit().putString(KEY_LASTFM_KEY, key.trim()).putString(KEY_LASTFM_USER, user.trim()).apply()
 
+    private const val KEY_LASTFM_SECRET = "lastfm_secret"
+    private const val KEY_LASTFM_SESSION = "lastfm_session"
+    private const val KEY_LASTFM_SESSION_USER = "lastfm_session_user"
+    private const val KEY_LASTFM_PENDING_TOKEN = "lastfm_pending_token"
+    private const val KEY_SCROBBLE = "lastfm_scrobble"
+    private const val KEY_SCROBBLED_UNTIL = "lastfm_scrobbled_until"
+    private const val KEY_LASTFM_IMPORTED_UNTIL = "lastfm_imported_until"
+    private const val KEY_YTM_COOKIE = "ytmusic_cookie"
+
+    fun lastFmSecret(context: Context): String = prefs(context).getString(KEY_LASTFM_SECRET, "").orEmpty()
+    fun setLastFmSecret(context: Context, secret: String) =
+        prefs(context).edit().putString(KEY_LASTFM_SECRET, secret.trim()).apply()
+
+    /** Last.fm session for scrobbling; "" when not connected. */
+    fun lastFmSession(context: Context): String = prefs(context).getString(KEY_LASTFM_SESSION, "").orEmpty()
+    fun lastFmSessionUser(context: Context): String = prefs(context).getString(KEY_LASTFM_SESSION_USER, "").orEmpty()
+    fun setLastFmSession(context: Context, session: String, user: String) = prefs(context).edit()
+        .putString(KEY_LASTFM_SESSION, session).putString(KEY_LASTFM_SESSION_USER, user).apply()
+
+    /** Token waiting for you to approve the app on last.fm. */
+    fun lastFmPendingToken(context: Context): String = prefs(context).getString(KEY_LASTFM_PENDING_TOKEN, "").orEmpty()
+    fun setLastFmPendingToken(context: Context, token: String) =
+        prefs(context).edit().putString(KEY_LASTFM_PENDING_TOKEN, token).apply()
+
+    fun scrobbleOn(context: Context): Boolean = prefs(context).getBoolean(KEY_SCROBBLE, true)
+    fun setScrobbleOn(context: Context, on: Boolean) = prefs(context).edit().putBoolean(KEY_SCROBBLE, on).apply()
+
+    /** Start time of the newest play sent to Last.fm. */
+    fun scrobbledUntil(context: Context): Long = prefs(context).getLong(KEY_SCROBBLED_UNTIL, 0L)
+    fun setScrobbledUntil(context: Context, at: Long) = prefs(context).edit().putLong(KEY_SCROBBLED_UNTIL, at).apply()
+
+    /** Newest Last.fm scrobble already imported (seconds), so a second import only adds new ones. */
+    fun lastFmImportedUntil(context: Context): Long = prefs(context).getLong(KEY_LASTFM_IMPORTED_UNTIL, 0L)
+    fun setLastFmImportedUntil(context: Context, uts: Long) =
+        prefs(context).edit().putLong(KEY_LASTFM_IMPORTED_UNTIL, uts).apply()
+
+    /** YouTube Music sign-in cookies (kept only on this phone); "" when signed out. */
+    fun ytMusicCookie(context: Context): String = prefs(context).getString(KEY_YTM_COOKIE, "").orEmpty()
+    fun setYtMusicCookie(context: Context, cookie: String) = prefs(context).edit().putString(KEY_YTM_COOKIE, cookie).apply()
+
     private const val KEY_SHAZAM = "shazam_reels"
     private const val KEY_RECOGNIZED_TO_LIBRARY = "recognized_to_library"
     private const val KEY_COUNT_PLAYER = "count_player"

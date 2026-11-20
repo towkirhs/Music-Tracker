@@ -3,6 +3,7 @@ package com.musictracker.tracking
 import android.content.Context
 import android.os.SystemClock
 import com.musictracker.data.Repo
+import com.musictracker.online.Scrobbler
 import com.musictracker.data.SongText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -138,6 +139,7 @@ object PlayTracker {
                 } else {
                     Repo.updatePlayedMs(context, id, playedMs)
                 }
+                if (final) Scrobbler.kick(context)
             }
         }
     }

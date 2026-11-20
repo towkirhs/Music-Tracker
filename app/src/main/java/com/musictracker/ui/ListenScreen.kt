@@ -79,7 +79,12 @@ fun ListenScreen(
     LaunchedEffect(searchRequest) { if (searchRequest > 0) searchFocus.requestFocus() }
     val discover by vm.discover.collectAsStateWithLifecycle()
     val radioName by vm.radioName.collectAsStateWithLifecycle()
+    val ytSignedIn by vm.ytSignedIn.collectAsStateWithLifecycle()
+    val ytLibrary by vm.ytLibrary.collectAsStateWithLifecycle()
+    val openPlaylist by vm.openPlaylist.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { vm.loadDiscover() }
+    LaunchedEffect(ytSignedIn) { vm.loadYtLibrary() }
+    openPlaylist?.let { PlaylistScreen(it, vm, onDismiss = vm::closePlaylist, onOpenPlayer = onOpenPlayer) }
     var query by rememberSaveable { mutableStateOf("") }
     val search by vm.search.collectAsStateWithLifecycle()
     val songs = remember(plays) { Stats.songs(plays, Range.ALL) }
@@ -190,6 +195,7 @@ fun ListenScreen(
                     }
                 }
             }
+            if (ytSignedIn) ytMusicItems(ytLibrary, vm)
             discoverItems(discover, radioName, vm, onGoSettings, onOpenPlayer)
             if (recent.isNotEmpty()) item { SectionTitle("Recently heard") }
             itemsIndexed(recent.take(20), key = { _, s -> "h" + s.trackId }) { i, s ->
@@ -211,6 +217,42 @@ fun ListenScreen(
                 )
             }
         }
+    }
+}
+
+/** Your YouTube Music liked songs and playlists. */
+private fun LazyListScope.ytMusicItems(library: YtLibraryState, vm: MainViewModel) {
+    item { SectionTitle("Your YouTube Music") }
+    item {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            item { PlaylistTile("Liked songs", "Your likes", null) { vm.showPlaylist(LIKED, "Liked songs", null) } }
+            items(library.playlists, key = { it.browseId }) { p ->
+                PlaylistTile(p.title, p.subtitle, p.thumbnail) { vm.showPlaylist(p.browseId, p.title, p.thumbnail) }
+            }
+        }
+    }
+    if (library.loading) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+    library.error?.let { message ->
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                TextButton(onClick = { vm.loadYtLibrary(force = true) }) { Text("Try again") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlaylistTile(title: String, subtitle: String, thumbnail: String?, onClick: () -> Unit) {
+    Column(
+        Modifier
+            .width(128.dp)
+            .clip(MaterialTheme.shapes.small)
+            .clickable(onClick = onClick),
+    ) {
+        Artwork(thumbnail, 128.dp, seed = title, shape = MaterialTheme.shapes.medium)
+        Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
+        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

@@ -18,6 +18,8 @@ import com.musictracker.data.AppDatabase
 import com.musictracker.data.Play
 import com.musictracker.data.Track
 import com.musictracker.online.LastFm
+import com.musictracker.online.YtMusic
+import com.musictracker.tracking.Prefs
 import com.musictracker.player.MusicPlayer
 import com.musictracker.player.PlayerState
 import com.musictracker.player.Song
@@ -63,7 +65,16 @@ class ScreenshotTest {
         seed()
         setPlaying() // so the mini player shows above the tabs
         val openPlayer = MutableStateFlow(false)
+        // A pretend YouTube Music sign-in, with its playlists already loaded, so nothing goes online.
+        Prefs.setYtMusicCookie(ApplicationProvider.getApplicationContext(), "SAPISID=test")
         val vm = MainViewModel(ApplicationProvider.getApplicationContext())
+        flow<YtLibraryState>(vm, "_ytLibrary").value = YtLibraryState(
+            loaded = true,
+            playlists = listOf(
+                YtMusic.Playlist("VL1", "Bangla mix", "Playlist • 24 songs", null),
+                YtMusic.Playlist("VL2", "Gym", "Playlist • 40 songs", null),
+            ),
+        )
         rule.setContent {
             MusicTrackerTheme { MusicTrackerApp(onRequestAudio = {}, openPlayer = openPlayer, vm = vm) }
         }
@@ -75,7 +86,21 @@ class ScreenshotTest {
             showDiscover(vm)
             rule.onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("Artists for you"))
         }
-        shot("03-library") { tap("Library") }
+        shot("02c-playlist") {
+            flow<PlaylistState?>(vm, "_openPlaylist").value = PlaylistState(
+                "Liked songs", null,
+                songs = listOf(
+                    Song("a", "Kesariya", "Arijit Singh"),
+                    Song("b", "Alo", "Tahsan"),
+                    Song("c", "Blinding Lights", "The Weeknd"),
+                ),
+            )
+        }
+        shot("03-library") {
+            flow<PlaylistState?>(vm, "_openPlaylist").value = null
+            rule.waitForIdle()
+            tap("Library")
+        }
         shot("04-library-artists") { tap("Artists") }
         shot("05-song-sheet") {
             tap("Songs")
@@ -90,6 +115,9 @@ class ScreenshotTest {
         }
         shot("08-history") { tap("History") }
         shot("09-settings") { tap("Settings") }
+        shot("09b-settings-accounts") {
+            rule.onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("Spotify"))
+        }
         shot("10-player") {
             tap("Home")
             openPlayer.value = true
@@ -100,12 +128,14 @@ class ScreenshotTest {
         if (errors.isNotEmpty()) throw AssertionError(errors.joinToString("\n"))
     }
 
+    /** One of the view model's private state flows, to show a state that would need the internet. */
+    @Suppress("UNCHECKED_CAST")
+    private fun <T> flow(vm: MainViewModel, name: String): MutableStateFlow<T> =
+        MainViewModel::class.java.getDeclaredField(name).apply { isAccessible = true }.get(vm) as MutableStateFlow<T>
+
     /** What the Listen tab shows once Last.fm suggestions have loaded (CI has no Last.fm key). */
     private fun showDiscover(vm: MainViewModel) {
-        val field = MainViewModel::class.java.getDeclaredField("_discover").apply { isAccessible = true }
-        @Suppress("UNCHECKED_CAST")
-        val flow = field.get(vm) as MutableStateFlow<DiscoverState>
-        flow.value = DiscoverState(
+        flow<DiscoverState>(vm, "_discover").value = DiscoverState(
             basedOn = LastFm.Track("Tum Hi Ho", "Arijit Singh"),
             similar = listOf(
                 LastFm.Track("Sunn Raha Hai", "Ankit Tiwari"),

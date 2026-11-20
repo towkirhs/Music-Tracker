@@ -19,7 +19,11 @@ import com.musictracker.export.Exporter
 import com.musictracker.tracking.Prefs
 import kotlinx.coroutines.Dispatchers
 import com.musictracker.data.Recognition
+import com.musictracker.online.Importer
 import com.musictracker.online.LastFm
+import com.musictracker.online.LastFmAccount
+import com.musictracker.online.Scrobbler
+import com.musictracker.online.YtMusic
 import com.musictracker.online.Lookup
 import com.musictracker.player.Radio
 import com.musictracker.player.Song
@@ -29,6 +33,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -53,6 +58,26 @@ data class DiscoverState(
     val bangla: List<LastFm.Track> = emptyList(),
     val hindi: List<LastFm.Track> = emptyList(),
 )
+
+/** Your YouTube Music playlists in the Listen tab. */
+data class YtLibraryState(
+    val loading: Boolean = false,
+    val loaded: Boolean = false,
+    val error: String? = null,
+    val playlists: List<YtMusic.Playlist> = emptyList(),
+)
+
+/** A YouTube Music playlist opened from the Listen tab. */
+data class PlaylistState(
+    val title: String,
+    val thumbnail: String?,
+    val loading: Boolean = false,
+    val songs: List<Song> = emptyList(),
+    val error: String? = null,
+)
+
+/** Stands for "Liked songs" in [MainViewModel.showPlaylist]. */
+const val LIKED = "LIKED"
 
 /** Search results in the Listen tab. */
 data class SearchState(
@@ -254,6 +279,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         Lookup.kick(app)
+        Scrobbler.kick(app, waitMs = 0) // plays left over from last time, e.g. when offline
     }
 
     // Last.fm: discovery and radio
@@ -373,6 +399,136 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun startTagRadio(label: String, tag: String) {
         val key = Prefs.lastFmKey(context)
         radio("$label radio", playSeedsFirst = true) { if (key.isBlank()) emptyList() else LastFm.tagTopTracks(key, tag, 15) }
+    }
+
+    // Accounts: Last.fm scrobbling, imports, YouTube Music library
+
+    val importState: StateFlow<Importer.State> = Importer.state
+
+    fun lastFmSecret(): String = Prefs.lastFmSecret(context)
+    fun lastFmSessionUser(): String = Prefs.lastFmSessionUser(context)
+    fun scrobbleOn(): Boolean = Prefs.scrobbleOn(context)
+    fun setScrobbleOn(on: Boolean) {
+        Prefs.setScrobbleOn(context, on)
+        if (on) Scrobbler.kick(context, waitMs = 0)
+    }
+
+    /** Opens last.fm so you can approve the app; [open] shows the page. Finished by [finishLastFmConnect]. */
+    fun connectLastFm(secret: String, open: (String) -> Unit) {
+        val key = Prefs.lastFmKey(context)
+        if (key.isBlank()) return toast("Save your Last.fm API key first")
+        if (secret.isBlank()) return toast("Paste the shared secret from the same Last.fm page")
+        Prefs.setLastFmSecret(context, secret)
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) { runCatching { LastFmAccount.startConnect(key, secret.trim()) } }
+            result.onSuccess { (token, url) ->
+                Prefs.setLastFmPendingToken(context, token)
+                open(url)
+            }.onFailure { toast("Last.fm didn't accept the key and secret: ${it.message}") }
+        }
+    }
+
+    private val _lastFmUser = MutableStateFlow(Prefs.lastFmSessionUser(app))
+    /** The Last.fm account scrobbles go to, or "" when not connected. */
+    val lastFmConnected: StateFlow<String> = _lastFmUser
+
+    /** Called when you come back from last.fm: completes connecting if you approved. */
+    fun finishLastFmConnect() {
+        val token = Prefs.lastFmPendingToken(context).ifBlank { return }
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching { LastFmAccount.finishConnect(Prefs.lastFmKey(context), Prefs.lastFmSecret(context), token) }
+            }
+            result.onSuccess { (session, user) ->
+                Prefs.setLastFmPendingToken(context, "")
+                Prefs.setLastFmSession(context, session, user)
+                // Only plays from now on are sent; older ones would be refused by Last.fm anyway.
+                Prefs.setScrobbledUntil(context, System.currentTimeMillis())
+                if (Prefs.lastFmUser(context).isBlank()) Prefs.setLastFm(context, Prefs.lastFmKey(context), user)
+                _lastFmUser.value = user
+                toast("Scrobbling to Last.fm as $user")
+            }.onFailure {
+                // 14: not approved yet. Keep the token so coming back again can finish.
+                if ((it as? LastFmAccount.Rejected)?.code != 14) {
+                    Prefs.setLastFmPendingToken(context, "")
+                    toast("Couldn't connect Last.fm: ${it.message}")
+                }
+            }
+        }
+    }
+
+    fun disconnectLastFm() {
+        Prefs.setLastFmSession(context, "", "")
+        _lastFmUser.value = ""
+        toast("Last.fm scrobbling turned off")
+    }
+
+    fun importLastFm() = Importer.importLastFm(context)
+    fun importFiles(uris: List<Uri>) = Importer.importFiles(context, uris)
+
+    private val _ytCookie = MutableStateFlow(Prefs.ytMusicCookie(app))
+    val ytSignedIn: StateFlow<Boolean> = _ytCookie.map { YtMusic.isSignedIn(it) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, YtMusic.isSignedIn(_ytCookie.value))
+
+    fun saveYtCookie(cookie: String) {
+        if (!YtMusic.isSignedIn(cookie)) return toast("Sign-in didn't finish. Try again.")
+        Prefs.setYtMusicCookie(context, cookie)
+        _ytCookie.value = cookie
+        toast("Signed in to YouTube Music")
+        loadYtLibrary(force = true)
+    }
+
+    fun signOutYt() {
+        Prefs.setYtMusicCookie(context, "")
+        _ytCookie.value = ""
+        _ytLibrary.value = YtLibraryState()
+        android.webkit.CookieManager.getInstance().removeAllCookies(null)
+        toast("Signed out of YouTube Music")
+    }
+
+    private val _ytLibrary = MutableStateFlow(YtLibraryState())
+    val ytLibrary: StateFlow<YtLibraryState> = _ytLibrary
+
+    /** Your playlists, loaded once per app session (or again with [force]). */
+    fun loadYtLibrary(force: Boolean = false) {
+        val cookie = _ytCookie.value
+        if (!YtMusic.isSignedIn(cookie)) return
+        val current = _ytLibrary.value
+        if (!force && (current.loading || current.loaded)) return
+        _ytLibrary.value = current.copy(loading = true, error = null)
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) { runCatching { YtMusic.playlists(cookie) } }
+            _ytLibrary.value = result.fold(
+                onSuccess = { YtLibraryState(loaded = true, playlists = it) },
+                onFailure = { YtLibraryState(error = it.message ?: "Couldn't load your YouTube Music library") },
+            )
+        }
+    }
+
+    private val _openPlaylist = MutableStateFlow<PlaylistState?>(null)
+    /** The YouTube Music playlist being shown, or null. */
+    val openPlaylist: StateFlow<PlaylistState?> = _openPlaylist
+    private var playlistJob: Job? = null
+
+    fun showPlaylist(browseId: String, title: String, thumbnail: String?) {
+        val cookie = _ytCookie.value
+        playlistJob?.cancel()
+        _openPlaylist.value = PlaylistState(title, thumbnail, loading = true)
+        playlistJob = viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching { if (browseId == LIKED) YtMusic.likedSongs(cookie) else YtMusic.playlistSongs(cookie, browseId) }
+            }
+            _openPlaylist.value = PlaylistState(
+                title, thumbnail,
+                songs = result.getOrDefault(emptyList()),
+                error = result.exceptionOrNull()?.let { it.message ?: "Couldn't load the songs" },
+            )
+        }
+    }
+
+    fun closePlaylist() {
+        playlistJob?.cancel()
+        _openPlaylist.value = null
     }
 
     fun toast(text: String) = Toast.makeText(context, text, Toast.LENGTH_LONG).show()

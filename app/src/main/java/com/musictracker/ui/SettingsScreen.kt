@@ -47,7 +47,10 @@ import com.musictracker.update.Updater
 fun SettingsScreen(vm: MainViewModel, onRequestAudio: () -> Unit) {
     val context = LocalContext.current
     var refresh by remember { mutableIntStateOf(0) }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { refresh++ }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        refresh++
+        vm.finishLastFmConnect() // back from approving the app on last.fm
+    }
     val readerOn = remember(refresh) { Setup.labelReaderOn(context) }
     val nowPlayingOn = remember(refresh) { Setup.nowPlayingOn(context) }
     val batteryOk = remember(refresh) { Setup.batteryUnrestricted(context) }
@@ -78,6 +81,15 @@ fun SettingsScreen(vm: MainViewModel, onRequestAudio: () -> Unit) {
     val restoreLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         restoreUri = uri
     }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        vm.importFiles(uris)
+    }
+    var lastFmSecret by remember { mutableStateOf(vm.lastFmSecret()) }
+    val lastFmConnected by vm.lastFmConnected.collectAsStateWithLifecycle()
+    var scrobbleOn by remember { mutableStateOf(vm.scrobbleOn()) }
+    val ytSignedIn by vm.ytSignedIn.collectAsStateWithLifecycle()
+    var showYtSignIn by remember { mutableStateOf(false) }
+    val importState by vm.importState.collectAsStateWithLifecycle()
 
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
@@ -308,6 +320,83 @@ fun SettingsScreen(vm: MainViewModel, onRequestAudio: () -> Unit) {
             }
         }
         item {
+            Group("Accounts and imports") {
+                Text("Last.fm scrobbling", style = MaterialTheme.typography.titleSmall)
+                if (lastFmConnected.isNotBlank()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Send songs to Last.fm as $lastFmConnected", modifier = Modifier.weight(1f))
+                        Switch(checked = scrobbleOn, onCheckedChange = { scrobbleOn = it; vm.setScrobbleOn(it) })
+                    }
+                    Text(
+                        "Songs played 30 seconds or more, with a known artist, are sent about a minute after they end.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    TextButton(onClick = { vm.disconnectLastFm() }) { Text("Disconnect Last.fm") }
+                } else {
+                    Text(
+                        "Save your API key above first. Then copy the \"Shared secret\" from the same Last.fm page, " +
+                            "tap Connect, and approve Music Tracker on last.fm. Your password never goes into this app.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    OutlinedTextField(
+                        value = lastFmSecret,
+                        onValueChange = { lastFmSecret = it },
+                        label = { Text("Last.fm shared secret") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    FilledTonalButton(onClick = { vm.connectLastFm(lastFmSecret) { uriHandler.openUri(it) } }) {
+                        Text("Connect Last.fm")
+                    }
+                }
+                OutlinedButton(enabled = !importState.running, onClick = { vm.importLastFm() }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Import my Last.fm history")
+                }
+
+                Text("YouTube Music", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
+                if (ytSignedIn) {
+                    Text("Signed in. Your liked songs and playlists are on the Listen tab.", style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = { vm.signOutYt() }) { Text("Sign out of YouTube Music") }
+                } else {
+                    Text(
+                        "Sign in on Google's page to play your liked songs and playlists here. It uses the same unofficial " +
+                            "method as other free YouTube Music apps, so it can stop working when Google changes things.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    FilledTonalButton(onClick = { showYtSignIn = true }) { Text("Sign in to YouTube Music") }
+                }
+                Text(
+                    "History: at takeout.google.com choose only \"YouTube and YouTube Music\", set its format to JSON and " +
+                        "keep only \"history\", then pick the zip here. Each imported play counts as 3 minutes.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { uriHandler.openUri("https://takeout.google.com") }) { Text("Open Takeout") }
+                    OutlinedButton(enabled = !importState.running, onClick = { importLauncher.launch(arrayOf("*/*")) }) {
+                        Text("Import file")
+                    }
+                }
+
+                Text("Spotify", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
+                Text(
+                    "Spotify's API now needs Premium, so history comes from a file instead. On Spotify's privacy page ask for " +
+                        "\"Extended streaming history\" (all years) or \"Account data\" (last year). When Spotify emails it, " +
+                        "pick the zip here.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { uriHandler.openUri("https://www.spotify.com/account/privacy/") }) { Text("Open Spotify privacy") }
+                    OutlinedButton(enabled = !importState.running, onClick = { importLauncher.launch(arrayOf("*/*")) }) {
+                        Text("Import file")
+                    }
+                }
+                if (importState.message.isNotBlank()) {
+                    if (importState.running) LinearProgressIndicator(Modifier.fillMaxWidth())
+                    Text(importState.message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
+        item {
             Group("Export and backup") {
                 Text(
                     "Files are saved on your phone only. CSV opens in Excel or Google Sheets. For a PDF, open the report " +
@@ -364,6 +453,16 @@ fun SettingsScreen(vm: MainViewModel, onRequestAudio: () -> Unit) {
                 modifier = Modifier.padding(top = 8.dp),
             )
         }
+    }
+
+    if (showYtSignIn) {
+        YtSignInScreen(
+            onSignedIn = { cookie ->
+                showYtSignIn = false
+                vm.saveYtCookie(cookie)
+            },
+            onDismiss = { showYtSignIn = false },
+        )
     }
 
     restoreUri?.let { uri ->
