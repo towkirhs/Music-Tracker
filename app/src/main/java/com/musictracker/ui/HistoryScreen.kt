@@ -2,7 +2,6 @@
 
 package com.musictracker.ui
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,7 +12,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -31,6 +29,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.Card
+import androidx.compose.ui.Alignment
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedButton
@@ -48,9 +47,9 @@ fun HistoryScreen(vm: MainViewModel, plays: List<PlayRow>, onOpenSong: (Long) ->
     var showInbox by rememberSaveable { mutableStateOf(false) }
     var naming by remember { mutableStateOf<Unidentified?>(null) }
 
-    LazyColumn(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)) {
+    LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(horizontal = 16.dp)) {
                 FilterChip(selected = !showInbox, onClick = { showInbox = false }, label = { Text("Plays") })
                 FilterChip(
                     selected = showInbox,
@@ -64,7 +63,8 @@ fun HistoryScreen(vm: MainViewModel, plays: List<PlayRow>, onOpenSong: (Long) ->
                 item {
                     Text(
                         "Nothing here. Songs the app hears but can't name show up here with their lyrics.",
-                        modifier = Modifier.padding(vertical = 24.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp),
                     )
                 }
             }
@@ -78,33 +78,39 @@ fun HistoryScreen(vm: MainViewModel, plays: List<PlayRow>, onOpenSong: (Long) ->
             }
         }
         if (!showInbox && plays.isEmpty()) {
-            item { Text("No plays yet.", modifier = Modifier.padding(vertical = 24.dp)) }
+            item {
+                Text(
+                    "No plays yet.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp),
+                )
+            }
         }
         if (!showInbox) byDay.forEach { (day, rows) ->
             item(key = "day-$day") {
-                Text(
-                    "${Stats.dayHeader(day)} · ${rows.size} plays · ${Stats.duration(rows.sumOf { it.playedMs })}",
-                    style = MaterialTheme.typography.titleSmall,
-                    modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
-                )
+                Row(
+                    Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    Text(Stats.dayHeader(day), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                    Text(
+                        "${rows.size} plays · ${Stats.duration(rows.sumOf { it.playedMs })}",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
             }
             items(rows, key = { it.playId }) { row ->
-                ListItem(
-                    modifier = Modifier.clickable { onOpenSong(row.trackId) },
-                    headlineContent = { Text(row.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    supportingContent = {
-                        Text(
-                            listOf(
-                                row.artist.ifBlank { "Unknown artist" },
-                                row.sourceApp,
-                                Stats.time(row.startedAt),
-                                Stats.duration(row.playedMs),
-                            ).joinToString(" · "),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    },
-                    trailingContent = {
+                SongRow(
+                    title = row.title,
+                    subtitle = listOf(
+                        row.artist.ifBlank { "Unknown artist" },
+                        row.sourceApp,
+                        Stats.time(row.startedAt),
+                        Stats.duration(row.playedMs),
+                    ).joinToString("  |  "),
+                    onClick = { onOpenSong(row.trackId) },
+                    trailing = {
                         IconButton(onClick = { toDelete = row }) {
                             Icon(Icons.Default.Delete, contentDescription = "Delete this play")
                         }
@@ -139,12 +145,13 @@ private fun UnidentifiedCard(item: Unidentified, onUseGuess: () -> Unit, onName:
     Card(
         Modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp),
+            .padding(horizontal = 16.dp, vertical = 6.dp),
     ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
                 "${item.sourceApp} · ${Stats.date(item.capturedAt)} ${Stats.time(item.capturedAt)}",
                 style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
             )
             if (item.reelLabel.isNotBlank()) Text(item.reelLabel, style = MaterialTheme.typography.bodySmall)
             Text(

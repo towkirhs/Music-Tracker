@@ -35,11 +35,11 @@ import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
+import androidx.compose.material3.Button
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -58,7 +58,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -168,14 +167,13 @@ fun RecognizeScreen(vm: MainViewModel, onDismiss: () -> Unit, onOpenPlayer: () -
                         }
                     }
                     items(history, key = { it.id }) { r ->
-                        ListItem(
-                            modifier = Modifier.clickable { playNow(r) },
-                            leadingContent = { Artwork(r.coverUrl, 48.dp) },
-                            headlineContent = { Text(r.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                            supportingContent = {
-                                Text("${r.artist} · ${Stats.date(r.recognizedAt)}", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            },
-                            trailingContent = {
+                        SongRow(
+                            title = r.title,
+                            subtitle = "${r.artist}  |  ${Stats.date(r.recognizedAt)}",
+                            artUrl = r.coverUrl,
+                            onClick = { playNow(r) },
+                            padding = NoPadding,
+                            trailing = {
                                 IconButton(onClick = { vm.deleteRecognition(r) }) {
                                     Icon(Icons.Default.Close, contentDescription = "Remove")
                                 }
@@ -241,12 +239,15 @@ private fun ResultCard(r: Recognition, onPlay: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Artwork(r.coverUrl, 200.dp)
+            Artwork(r.coverUrl, 200.dp, seed = r.title)
             Text(r.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
             Text(r.artist, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
             if (r.album.isNotBlank()) Text(r.album, style = MaterialTheme.typography.bodySmall)
             if (Prefs.recognizedToLibrary(context)) Text("Saved to your library.", style = MaterialTheme.typography.bodySmall)
-            FilledTonalButton(onClick = onPlay, modifier = Modifier.fillMaxWidth()) { Text("▶ Play here") }
+            Button(onClick = onPlay, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                Text("Play here", modifier = Modifier.padding(start = 8.dp))
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = {
                     open(

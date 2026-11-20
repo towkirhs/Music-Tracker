@@ -13,12 +13,23 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.AssistChip
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.InputChip
+import androidx.compose.material3.PrimaryScrollableTabRow
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Tab
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -33,7 +44,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.musictracker.data.PlayRow
@@ -103,24 +113,39 @@ fun LibraryScreen(plays: List<PlayRow>, onOpenSong: (Long) -> Unit, onOpenPlayer
             }
     }
 
-    Column(Modifier.padding(horizontal = 16.dp)) {
+    Column {
+        PrimaryScrollableTabRow(
+            selectedTabIndex = GroupBy.entries.indexOf(if (filterGroup != null) GroupBy.SONGS else groupBy),
+            edgePadding = 16.dp,
+            divider = { HorizontalDivider(color = MaterialTheme.colorScheme.outline) },
+        ) {
+            GroupBy.entries.forEach { g ->
+                Tab(
+                    selected = groupBy == g && filterGroup == null,
+                    onClick = { groupBy = g; filterGroup = null },
+                    text = { Text(g.label, style = MaterialTheme.typography.titleSmall) },
+                    unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
-            label = { Text("Search songs or artists") },
+            placeholder = { Text("Search songs or artists") },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             singleLine = true,
+            shape = MaterialTheme.shapes.medium,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 8.dp),
+                .padding(start = 16.dp, end = 16.dp, top = 12.dp),
         )
-        Box(Modifier.padding(top = 8.dp)) { RangeChips(range) { range = it } }
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
-            items(GroupBy.entries) { g ->
-                FilterChip(
-                    selected = groupBy == g && filterGroup == null,
-                    onClick = { groupBy = g; filterGroup = null },
-                    label = { Text(g.label) },
-                )
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            modifier = Modifier.padding(top = 8.dp),
+        ) {
+            items(Range.entries) { r ->
+                FilterChip(selected = r == range, onClick = { range = r }, label = { Text(r.label) })
             }
             item {
                 FilterChip(
@@ -130,22 +155,38 @@ fun LibraryScreen(plays: List<PlayRow>, onOpenSong: (Long) -> Unit, onOpenPlayer
                 )
             }
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            filterGroup?.let { g ->
-                AssistChip(
-                    onClick = { filterGroup = null },
-                    label = { Text("${g.label.dropLast(1)}: $filterValue  ✕") },
-                )
-            }
-            Box(Modifier.weight(1f))
+        Row(
+            Modifier.padding(start = 16.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val count = if (showSongs) "${songs.size} songs" else "${groups.size} ${groupBy.label.lowercase(Locale.ROOT)}"
+            Text(count, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
             Box {
-                TextButton(onClick = { sortMenu = true }) { Text("Sort: ${sortBy.label}") }
+                TextButton(onClick = { sortMenu = true }) {
+                    Text(sortBy.label)
+                    Icon(Icons.Default.SwapVert, contentDescription = "Sort", modifier = Modifier.padding(start = 4.dp).size(18.dp))
+                }
                 DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
                     SortBy.entries.forEach { s ->
-                        DropdownMenuItem(text = { Text(s.label) }, onClick = { sortBy = s; sortMenu = false })
+                        DropdownMenuItem(
+                            text = { Text(s.label) },
+                            onClick = { sortBy = s; sortMenu = false },
+                            trailingIcon = {
+                                RadioButton(selected = sortBy == s, onClick = { sortBy = s; sortMenu = false })
+                            },
+                        )
                     }
                 }
             }
+        }
+        filterGroup?.let { g ->
+            InputChip(
+                selected = true,
+                onClick = { filterGroup = null },
+                label = { Text("${g.label.dropLast(1)}: $filterValue") },
+                trailingIcon = { Icon(Icons.Default.Close, contentDescription = "Clear", modifier = Modifier.size(18.dp)) },
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
         }
 
         LazyColumn(Modifier.fillMaxWidth()) {
@@ -153,34 +194,48 @@ fun LibraryScreen(plays: List<PlayRow>, onOpenSong: (Long) -> Unit, onOpenPlayer
                 if (songs.isEmpty()) item { Empty() }
                 if (songs.isNotEmpty()) {
                     item {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 4.dp)) {
-                            FilledTonalButton(onClick = {
-                                MusicPlayer.play(context, songs.toSongs())
-                                onOpenPlayer()
-                            }) { Text("▶ Play ${songs.size}") }
-                            OutlinedButton(onClick = {
-                                MusicPlayer.play(context, songs.toSongs(), songs.indices.random(), shuffle = true)
-                                onOpenPlayer()
-                            }) { Text("Shuffle") }
+                        Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                            ShufflePlayButtons(
+                                onShuffle = {
+                                    MusicPlayer.play(context, songs.toSongs(), songs.indices.random(), shuffle = true)
+                                    onOpenPlayer()
+                                },
+                                onPlay = {
+                                    MusicPlayer.play(context, songs.toSongs())
+                                    onOpenPlayer()
+                                },
+                            )
                         }
                     }
                 }
-                items(songs, key = { it.trackId }) { song ->
-                    SongItem(song, detail = detailFor(song, sortBy)) { onOpenSong(song.trackId) }
+                itemsIndexed(songs, key = { _, s -> s.trackId }) { i, song ->
+                    SongItem(
+                        song,
+                        detail = detailFor(song, sortBy),
+                        onPlay = {
+                            MusicPlayer.play(context, songs.toSongs(), i)
+                            onOpenPlayer()
+                        },
+                    ) { onOpenSong(song.trackId) }
                 }
             } else {
                 if (groups.isEmpty()) item { Empty() }
                 items(groups, key = { it.name }) { g ->
                     ListItem(
                         modifier = Modifier.clickable { filterGroup = groupBy; filterValue = g.name },
-                        headlineContent = { Text(g.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        supportingContent = { Text("${g.songs} songs") },
-                        trailingContent = {
+                        leadingContent = { InitialAvatar(g.name, 56.dp) },
+                        headlineContent = {
+                            Text(g.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        },
+                        supportingContent = {
                             Text(
-                                "${g.plays} plays\n${Stats.duration(g.ms)}",
+                                "${g.songs} songs  |  ${g.plays} plays  |  ${Stats.duration(g.ms)}",
                                 style = MaterialTheme.typography.bodySmall,
-                                textAlign = TextAlign.End,
+                                modifier = Modifier.padding(top = 4.dp),
                             )
+                        },
+                        trailingContent = {
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
                         },
                     )
                 }
@@ -190,10 +245,10 @@ fun LibraryScreen(plays: List<PlayRow>, onOpenSong: (Long) -> Unit, onOpenPlayer
 }
 
 private fun detailFor(song: SongStat, sortBy: SortBy): String = when (sortBy) {
-    SortBy.RECENT -> "${Stats.date(song.lastPlayed)}\n${song.plays} plays"
-    SortBy.NEW -> "found ${Stats.date(song.firstSeen)}\n${song.plays} plays"
-    SortBy.SCORE -> "score ${song.score}\n${song.plays} plays"
-    else -> "${song.plays} plays\n${Stats.duration(song.ms)}"
+    SortBy.RECENT -> "${Stats.date(song.lastPlayed)} · ${song.plays} plays"
+    SortBy.NEW -> "found ${Stats.date(song.firstSeen)} · ${song.plays} plays"
+    SortBy.SCORE -> "score ${song.score} · ${song.plays} plays"
+    else -> "${song.plays} plays · ${Stats.duration(song.ms)}"
 }
 
 @Composable
@@ -201,6 +256,7 @@ private fun Empty() {
     Text(
         "No songs here yet.",
         style = MaterialTheme.typography.bodyMedium,
-        modifier = Modifier.padding(vertical = 24.dp),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp),
     )
 }

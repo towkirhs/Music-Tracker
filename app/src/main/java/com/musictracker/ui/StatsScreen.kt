@@ -66,7 +66,7 @@ fun StatsScreen(plays: List<PlayRow>, onOpenSong: (Long) -> Unit) {
         item { SectionTitle("Top songs") }
         if (topSongs.isEmpty()) item { Text("No plays in this period.") }
         itemsIndexed(topSongs, key = { _, s -> s.trackId }) { i, song ->
-            SongItem(song, rank = i + 1) { onOpenSong(song.trackId) }
+            SongItem(song, rank = i + 1, padding = PaddingValues(vertical = 4.dp)) { onOpenSong(song.trackId) }
         }
         item { SectionTitle("Top artists") }
         itemsIndexed(artists.take(5), key = { _, a -> "artist-" + a.name }) { _, a ->

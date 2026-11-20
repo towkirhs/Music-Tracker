@@ -14,10 +14,28 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -49,88 +67,119 @@ fun SongDialog(trackId: Long, plays: List<PlayRow>, vm: MainViewModel, onDismiss
     var artist by remember(trackId) { mutableStateOf(first.artist) }
     var language by remember(trackId) { mutableStateOf(first.language) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var editing by remember(trackId) { mutableStateOf(false) }
     val apps = rows.groupingBy { it.sourceApp }.eachCount().entries
         .sortedByDescending { it.value }.joinToString { "${it.key} (${it.value})" }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Song") },
-        text = {
-            Column(
-                Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(
-                    "${rows.size} plays · ${Stats.duration(rows.sumOf { it.playedMs })}\n" +
-                        "First heard ${Stats.date(first.firstSeen)} · last ${Stats.date(rows.maxOf { it.startedAt })}\n" +
-                        "Heard on: $apps",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Title") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = artist, onValueChange = { artist = it }, label = { Text("Artist") }, modifier = Modifier.fillMaxWidth())
-                FilledTonalButton(
-                    onClick = {
-                        MusicPlayer.play(context, listOf(Song(null, first.title, first.artist)))
-                        onDismiss()
-                        onOpenPlayer()
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("▶ Play here") }
-                OutlinedButton(
-                    onClick = {
-                        MusicPlayer.playNext(context, Song(null, first.title, first.artist))
-                        vm.toast("Plays next")
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("Play next") }
-                OutlinedButton(
-                    onClick = {
-                        val url = SongText.youtubeUrl(title, artist)
-                        try {
-                            context.startActivity(
-                                Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                            )
-                        } catch (_: Exception) {
-                            Toast.makeText(context, "No app or browser found to open YouTube", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("▶ Open on YouTube") }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { val t = title; title = artist; artist = t }) { Text("Swap") }
-                    OutlinedButton(onClick = { vm.setFavourite(trackId, !first.isFavourite) }) {
-                        Text(if (first.isFavourite) "♥ Unheart" else "♡ Heart")
-                    }
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(
+            Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 16.dp),
+        ) {
+            Row(Modifier.padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
+                Artwork(null, 64.dp, seed = first.title)
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .padding(horizontal = 16.dp),
+                ) {
+                    Text(first.title, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        "${first.artist.ifBlank { "Unknown artist" }}  |  ${rows.size} plays · ${Stats.duration(rows.sumOf { it.playedMs })}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    SongText.LANGUAGES.forEach { lang ->
-                        FilterChip(
-                            selected = language == lang,
-                            onClick = { language = lang },
-                            label = { Text(lang) },
-                        )
-                    }
-                }
-                Text(
-                    "Renaming to a name you already have merges the two songs.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                TextButton(onClick = { confirmDelete = true }, modifier = Modifier.padding(top = 4.dp)) {
-                    Text("Delete song and all its plays", color = MaterialTheme.colorScheme.error)
+                IconButton(onClick = { vm.setFavourite(trackId, !first.isFavourite) }) {
+                    Icon(
+                        if (first.isFavourite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = if (first.isFavourite) "Unheart" else "Heart",
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
                 }
             }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = title.isNotBlank(),
-                onClick = {
-                    vm.editTrack(trackId, title, artist, language)
-                    onDismiss()
-                },
-            ) { Text("Save") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
-    )
+            Text(
+                "First heard ${Stats.date(first.firstSeen)} · last ${Stats.date(rows.maxOf { it.startedAt })}\nHeard on: $apps",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+            )
+            HorizontalDivider(Modifier.padding(horizontal = 24.dp), color = MaterialTheme.colorScheme.outline)
+            SheetAction(Icons.Default.PlayCircle, "Play here") {
+                MusicPlayer.play(context, listOf(Song(null, first.title, first.artist)))
+                onDismiss()
+                onOpenPlayer()
+            }
+            SheetAction(Icons.AutoMirrored.Filled.PlaylistPlay, "Play next") {
+                MusicPlayer.playNext(context, Song(null, first.title, first.artist))
+                vm.toast("Plays next")
+            }
+            SheetAction(Icons.AutoMirrored.Filled.OpenInNew, "Open on YouTube") {
+                val url = SongText.youtubeUrl(title, artist)
+                try {
+                    context.startActivity(
+                        Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                } catch (_: Exception) {
+                    Toast.makeText(context, "No app or browser found to open YouTube", Toast.LENGTH_SHORT).show()
+                }
+            }
+            SheetAction(Icons.Default.Edit, "Edit details") { editing = !editing }
+            if (editing) {
+                Column(
+                    Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedTextField(
+                        value = title,
+                        onValueChange = { title = it },
+                        label = { Text("Title") },
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = artist,
+                        onValueChange = { artist = it },
+                        label = { Text("Artist") },
+                        shape = MaterialTheme.shapes.medium,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        SongText.LANGUAGES.forEach { lang ->
+                            FilterChip(
+                                selected = language == lang,
+                                onClick = { language = lang },
+                                label = { Text(lang) },
+                            )
+                        }
+                    }
+                    Text(
+                        "Renaming to a name you already have merges the two songs.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        FilledTonalButton(onClick = { val t = title; title = artist; artist = t }, modifier = Modifier.weight(1f)) {
+                            Text("Swap title and artist")
+                        }
+                        Button(
+                            enabled = title.isNotBlank(),
+                            onClick = {
+                                vm.editTrack(trackId, title, artist, language)
+                                onDismiss()
+                            },
+                            modifier = Modifier.weight(1f),
+                        ) { Text("Save") }
+                    }
+                }
+            }
+            SheetAction(Icons.Default.Delete, "Delete song and all its plays", danger = true) { confirmDelete = true }
+        }
+    }
 
     if (confirmDelete) {
         AlertDialog(
@@ -146,5 +195,20 @@ fun SongDialog(trackId: Long, plays: List<PlayRow>, vm: MainViewModel, onDismiss
             },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
         )
+    }
+}
+
+@Composable
+private fun SheetAction(icon: ImageVector, label: String, danger: Boolean = false, onClick: () -> Unit) {
+    val color = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 24.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(22.dp))
+        Text(label, style = MaterialTheme.typography.bodyLarge, color = color, modifier = Modifier.padding(start = 16.dp))
     }
 }

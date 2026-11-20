@@ -2,7 +2,6 @@
 
 package com.musictracker.ui
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -16,6 +15,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -23,7 +26,6 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -37,9 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.musictracker.data.PlayRow
@@ -69,21 +69,30 @@ fun ListenScreen(vm: MainViewModel, plays: List<PlayRow>, onRecognize: () -> Uni
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                ),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Column(Modifier.padding(16.dp)) {
-                    Text(
-                        "What's this song?",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
+                Column(Modifier.padding(20.dp)) {
+                    Text("What's this song?", style = MaterialTheme.typography.titleLarge)
                     Text(
                         "Recognise music playing around you or on this phone, then play it here.",
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(top = 4.dp),
                     )
-                    Button(onClick = onRecognize, modifier = Modifier.padding(top = 8.dp)) { Text("Recognise a song") }
+                    Button(
+                        onClick = onRecognize,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.onPrimary,
+                            contentColor = MaterialTheme.colorScheme.primary,
+                        ),
+                        modifier = Modifier.padding(top = 16.dp),
+                    ) {
+                        Icon(Icons.Default.Mic, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Text("Recognise a song", modifier = Modifier.padding(start = 8.dp))
+                    }
                 }
             }
         }
@@ -91,8 +100,10 @@ fun ListenScreen(vm: MainViewModel, plays: List<PlayRow>, onRecognize: () -> Uni
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                label = { Text("Search songs to play") },
+                placeholder = { Text("Search songs to play") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 singleLine = true,
+                shape = MaterialTheme.shapes.medium,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = {
                     focus.clearFocus()
@@ -132,16 +143,13 @@ fun ListenScreen(vm: MainViewModel, plays: List<PlayRow>, onRecognize: () -> Uni
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilledTonalButton(onClick = { play(mostPlayed, false) }, modifier = Modifier.weight(1f)) {
-                                Text("▶ Most played")
-                            }
-                            FilledTonalButton(onClick = { play(songs, true) }, modifier = Modifier.weight(1f)) {
-                                Text("Shuffle all")
-                            }
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        ShufflePlayButtons(
+                            onShuffle = { play(songs, true) },
+                            onPlay = { play(mostPlayed, false) },
+                            playLabel = "Most played",
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             FilledTonalButton(
                                 onClick = { play(favourites, false) },
                                 enabled = favourites.isNotEmpty(),
@@ -156,16 +164,15 @@ fun ListenScreen(vm: MainViewModel, plays: List<PlayRow>, onRecognize: () -> Uni
             }
             if (recent.isNotEmpty()) item { SectionTitle("Recently heard") }
             itemsIndexed(recent.take(20), key = { _, s -> "h" + s.trackId }) { i, s ->
-                ListItem(
-                    modifier = Modifier.clickable {
+                SongRow(
+                    padding = NoPadding,
+                    title = s.title,
+                    subtitle = s.artist.ifBlank { "Unknown artist" },
+                    onClick = {
                         MusicPlayer.play(context, recent.take(50).toSongs(), i)
                         onOpenPlayer()
                     },
-                    headlineContent = { Text(s.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    supportingContent = {
-                        Text(s.artist.ifBlank { "Unknown artist" }, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    },
-                    trailingContent = {
+                    trailing = {
                         IconButton(onClick = {
                             MusicPlayer.addToQueue(context, Song(null, s.title, s.artist))
                             vm.toast("Added to queue")
@@ -179,21 +186,16 @@ fun ListenScreen(vm: MainViewModel, plays: List<PlayRow>, onRecognize: () -> Uni
 
 @Composable
 private fun SongResultItem(song: Song, onPlay: () -> Unit, onQueue: () -> Unit) {
-    ListItem(
-        modifier = Modifier.clickable(onClick = onPlay),
-        leadingContent = { Artwork(song.thumbnail, 48.dp) },
-        headlineContent = { Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        supportingContent = {
-            Text(
-                listOfNotNull(
-                    song.artist.ifBlank { null },
-                    song.durationMs.takeIf { it > 0 }?.let { "%d:%02d".format(it / 60_000, it / 1000 % 60) },
-                ).joinToString(" · "),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        },
-        trailingContent = {
+    SongRow(
+        padding = NoPadding,
+        title = song.title,
+        subtitle = listOfNotNull(
+            song.artist.ifBlank { null },
+            song.durationMs.takeIf { it > 0 }?.let { "%d:%02d".format(it / 60_000, it / 1000 % 60) },
+        ).joinToString("  |  "),
+        artUrl = song.thumbnail,
+        onClick = onPlay,
+        trailing = {
             IconButton(onClick = onQueue) { Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = "Add to queue") }
         },
     )

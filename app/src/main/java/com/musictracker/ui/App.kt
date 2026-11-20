@@ -3,9 +3,26 @@
 package com.musictracker.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material3.Button
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,7 +41,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -42,7 +58,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -76,7 +91,27 @@ fun MusicTrackerApp(
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text(if (tab == Tab.HOME) "Music Tracker" else tab.label) })
+            TopAppBar(
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.MusicNote,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary)
+                                .padding(6.dp),
+                        )
+                        Text(
+                            if (tab == Tab.HOME) "Music Tracker" else tab.label,
+                            style = MaterialTheme.typography.headlineSmall,
+                            modifier = Modifier.padding(start = 12.dp),
+                        )
+                    }
+                },
+            )
         },
         bottomBar = {
             Column {
@@ -88,6 +123,13 @@ fun MusicTrackerApp(
                             onClick = { tab = t },
                             icon = { Icon(t.icon, contentDescription = null) },
                             label = { Text(t.label, maxLines = 1) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = Color.Transparent,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            ),
                         )
                     }
                 }
@@ -100,6 +142,8 @@ fun MusicTrackerApp(
                     vm, plays,
                     onOpenSong = { openSong = it },
                     onGoSettings = { tab = Tab.SETTINGS },
+                    onGoHistory = { tab = Tab.HISTORY },
+                    onGoStats = { tab = Tab.STATS },
                     onRequestAudio = onRequestAudio,
                     onRecognize = { showRecognize = true },
                     updateAvailable = update as? Updater.State.Available,
@@ -129,56 +173,167 @@ fun RangeChips(selected: Range, onSelect: (Range) -> Unit) {
     }
 }
 
+val RowPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+val NoPadding = PaddingValues(0.dp)
+
+/**
+ * A song in a list: art, title, a grey detail line, and an orange play button when [onPlay] is set.
+ * Lists that already pad and space their items pass [padding] = [NoPadding].
+ */
 @Composable
-fun SongItem(song: SongStat, rank: Int? = null, detail: String? = null, onClick: () -> Unit) {
-    ListItem(
-        modifier = Modifier.clickable(onClick = onClick),
-        leadingContent = if (rank != null) {
-            { Text("$rank", style = MaterialTheme.typography.titleMedium) }
-        } else {
-            null
-        },
-        headlineContent = {
+fun SongRow(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    artUrl: String? = null,
+    rank: Int? = null,
+    onPlay: (() -> Unit)? = null,
+    padding: PaddingValues = RowPadding,
+    trailing: (@Composable () -> Unit)? = null,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(padding),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (rank != null) {
             Text(
-                (if (song.isFavourite) "♥ " else "") + song.title,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                "$rank",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.width(28.dp),
             )
-        },
-        supportingContent = {
+        }
+        Artwork(artUrl, 56.dp, seed = title)
+        Column(
+            Modifier
+                .weight(1f)
+                .padding(horizontal = 16.dp),
+        ) {
+            Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                listOf(song.artist.ifBlank { "Unknown artist" }, song.language).joinToString(" · "),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        },
-        trailingContent = {
-            Text(
-                detail ?: "${song.plays} plays\n${Stats.duration(song.ms)}",
+                subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                textAlign = TextAlign.End,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 4.dp),
             )
-        },
-    )
+        }
+        trailing?.invoke()
+        if (onPlay != null) PlayCircle(onPlay)
+    }
 }
 
 @Composable
-fun StatTile(value: String, label: String, modifier: Modifier = Modifier) {
-    Card(modifier) {
-        Column(Modifier.padding(12.dp)) {
-            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, maxLines = 1)
-            Text(label, style = MaterialTheme.typography.bodySmall)
+fun SongItem(
+    song: SongStat,
+    rank: Int? = null,
+    detail: String? = null,
+    onPlay: (() -> Unit)? = null,
+    padding: PaddingValues = RowPadding,
+    onClick: () -> Unit,
+) {
+    SongRow(
+        title = (if (song.isFavourite) "♥ " else "") + song.title,
+        subtitle = listOf(
+            song.artist.ifBlank { "Unknown artist" },
+            detail ?: "${song.plays} plays · ${Stats.duration(song.ms)}",
+        ).joinToString("  |  "),
+        onClick = onClick,
+        rank = rank,
+        onPlay = onPlay,
+        padding = padding,
+    )
+}
+
+/** The small orange round play button on song rows. */
+@Composable
+fun PlayCircle(onClick: () -> Unit) {
+    FilledIconButton(onClick = onClick, modifier = Modifier.size(32.dp)) {
+        Icon(Icons.Default.PlayArrow, contentDescription = "Play", modifier = Modifier.size(20.dp))
+    }
+}
+
+/** A round tile with a name's first letter, for artists, apps and languages. */
+@Composable
+fun InitialAvatar(name: String, size: Dp) {
+    val (from, to) = ArtPalette[Math.floorMod(name.hashCode(), ArtPalette.size)]
+    Box(
+        Modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(Brush.linearGradient(listOf(from, to))),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            name.trim().take(1).uppercase().ifBlank { "?" },
+            style = if (size > 56.dp) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onPrimary,
+        )
+    }
+}
+
+/** Orange "Shuffle" next to a dark "Play", as on album pages. */
+@Composable
+fun ShufflePlayButtons(onShuffle: () -> Unit, onPlay: () -> Unit, playLabel: String = "Play") {
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Button(onClick = onShuffle, modifier = Modifier.weight(1f)) {
+            Icon(Icons.Default.Shuffle, contentDescription = null, modifier = Modifier.size(18.dp))
+            Text("Shuffle", modifier = Modifier.padding(start = 8.dp))
+        }
+        FilledTonalButton(onClick = onPlay, modifier = Modifier.weight(1f)) {
+            Icon(
+                Icons.Default.PlayCircle,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(playLabel, modifier = Modifier.padding(start = 8.dp))
         }
     }
 }
 
 @Composable
-fun SectionTitle(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.titleMedium,
-        modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
-    )
+fun StatTile(value: String, label: String, modifier: Modifier = Modifier) {
+    Card(modifier) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 14.dp)) {
+            Text(value, style = MaterialTheme.typography.titleLarge, maxLines = 1)
+            Text(
+                label,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+    }
+}
+
+/** A bold section title, with an orange link such as "See all" on the right. */
+@Composable
+fun SectionTitle(text: String, action: String? = null, onAction: () -> Unit = {}) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 16.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+        if (action != null) {
+            Text(
+                action,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .clip(MaterialTheme.shapes.extraSmall)
+                    .clickable(onClick = onAction)
+                    .padding(4.dp),
+            )
+        }
+    }
 }
 
 /** Simple bar chart; [labels] are shown under some of the bars. */
@@ -195,10 +350,11 @@ fun BarChart(values: List<Float>, labels: List<String>, color: Color = MaterialT
             val slot = size.width / values.size
             values.forEachIndexed { i, v ->
                 val h = size.height * (v / max)
-                drawRect(
+                drawRoundRect(
                     color = color,
-                    topLeft = Offset(i * slot + slot * 0.15f, size.height - h),
-                    size = Size(slot * 0.7f, h),
+                    topLeft = Offset(i * slot + slot * 0.2f, size.height - h),
+                    size = Size(slot * 0.6f, h),
+                    cornerRadius = CornerRadius(slot * 0.3f),
                 )
             }
         }

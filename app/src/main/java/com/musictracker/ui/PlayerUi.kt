@@ -4,8 +4,6 @@ package com.musictracker.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,8 +19,18 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Lyrics
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MusicNote
@@ -37,11 +45,9 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -59,9 +65,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -79,22 +86,25 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
-/** Album art, or a note on a tinted square when there is none. */
+/**
+ * Album art. With no cover, a gradient tile picked from [seed] (usually the title), so each song
+ * keeps its own colour.
+ */
 @Composable
-fun Artwork(url: String?, size: Dp, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(if (size > 100.dp) 16.dp else 8.dp)
+fun Artwork(url: String?, size: Dp, modifier: Modifier = Modifier, seed: String = "", shape: Shape? = null) {
+    val (from, to) = ArtPalette[Math.floorMod(seed.hashCode(), ArtPalette.size)]
     Box(
         modifier
             .size(size)
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.secondaryContainer),
+            .clip(shape ?: if (size > 100.dp) MaterialTheme.shapes.large else MaterialTheme.shapes.small)
+            .background(Brush.linearGradient(listOf(from, to))),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
             Icons.Default.MusicNote,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-            modifier = Modifier.size(size / 2),
+            tint = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
+            modifier = Modifier.size(size / 2.5f),
         )
         if (!url.isNullOrBlank()) {
             AsyncImage(
@@ -126,25 +136,31 @@ fun MiniPlayer(onOpen: () -> Unit) {
     val state by MusicPlayer.state.collectAsStateWithLifecycle()
     val song = state.current ?: return
     val position = rememberPosition()
-    Surface(tonalElevation = 3.dp, modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen)) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
+    ) {
         Column {
             LinearProgressIndicator(
                 progress = { if (state.durationMs > 0) (position.toFloat() / state.durationMs).coerceIn(0f, 1f) else 0f },
                 modifier = Modifier.fillMaxWidth(),
+                trackColor = MaterialTheme.colorScheme.outline,
+                drawStopIndicator = {},
             )
             Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Artwork(song.thumbnail, 44.dp)
+                Artwork(song.thumbnail, 44.dp, seed = song.title)
                 Column(
                     Modifier
                         .weight(1f)
                         .padding(horizontal = 12.dp),
                 ) {
-                    Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
+                    Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall)
                     Text(
                         song.artist.ifBlank { "Unknown artist" },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 PlayPauseButton(state.isPlaying, state.isLoading, filled = false)
@@ -164,9 +180,39 @@ private fun PlayPauseButton(playing: Boolean, loading: Boolean, filled: Boolean)
         }
     }
     if (filled) {
-        FilledIconButton(onClick = { MusicPlayer.togglePlay() }, modifier = Modifier.size(72.dp), content = content)
+        FilledIconButton(onClick = { MusicPlayer.togglePlay() }, modifier = Modifier.size(72.dp)) {
+            Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onPrimary) {
+                    when {
+                        loading -> CircularProgressIndicator(
+                            Modifier.size(28.dp),
+                            strokeWidth = 3.dp,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                        playing -> Icon(Icons.Default.Pause, contentDescription = "Pause", modifier = Modifier.size(40.dp))
+                        else -> Icon(Icons.Default.PlayArrow, contentDescription = "Play", modifier = Modifier.size(40.dp))
+                    }
+                }
+            }
+        }
     } else {
-        IconButton(onClick = { MusicPlayer.togglePlay() }, content = content)
+        IconButton(
+            onClick = { MusicPlayer.togglePlay() },
+            colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+            content = content,
+        )
+    }
+}
+
+/** An icon button that turns orange while its setting is on. */
+@Composable
+private fun ToggleIcon(icon: ImageVector, label: String, on: Boolean, onClick: () -> Unit) {
+    IconButton(onClick = onClick) {
+        Icon(
+            icon,
+            contentDescription = label,
+            tint = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -197,37 +243,52 @@ fun PlayerScreen(onDismiss: () -> Unit) {
                 Modifier
                     .statusBarsPadding()
                     .navigationBarsPadding()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                    .padding(horizontal = 24.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onDismiss) { Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Close player") }
-                    Text("Now playing", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                    IconButton(onClick = onDismiss, modifier = Modifier.offset(x = (-12).dp)) {
+                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Close player")
+                    }
+                    Text(
+                        pane?.label ?: "Now playing",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.weight(1f),
+                    )
                     if (sleepAt > 0) {
                         Text(
                             "Sleep in ${((sleepAt - System.currentTimeMillis()) / 60_000 + 1).coerceAtLeast(1)} min",
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
                         )
                     }
                 }
 
                 Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     when (pane) {
-                        null -> Artwork(song.thumbnail, 300.dp, Modifier.aspectRatio(1f))
+                        null -> Artwork(song.thumbnail, 320.dp, Modifier.aspectRatio(1f), seed = song.title)
                         PlayerPane.LYRICS -> LyricsPane(lyrics, position)
                         PlayerPane.QUEUE -> QueuePane(state.queue, state.index)
                     }
                 }
 
-                Column {
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         song.title,
                         style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    Text(song.artist.ifBlank { "Unknown artist" }, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
+                    Text(
+                        song.artist.ifBlank { "Unknown artist" },
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
                 }
                 state.error?.let {
                     Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
@@ -237,16 +298,10 @@ fun PlayerScreen(onDismiss: () -> Unit) {
 
                 Row(
                     Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconButton(onClick = { MusicPlayer.toggleShuffle() }) {
-                        Icon(
-                            Icons.Default.Shuffle,
-                            contentDescription = "Shuffle",
-                            tint = if (state.shuffle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    ToggleIcon(Icons.Default.Shuffle, "Shuffle", state.shuffle) { MusicPlayer.toggleShuffle() }
                     IconButton(onClick = { MusicPlayer.previous() }) {
                         Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", modifier = Modifier.size(36.dp))
                     }
@@ -254,31 +309,25 @@ fun PlayerScreen(onDismiss: () -> Unit) {
                     IconButton(onClick = { MusicPlayer.next() }) {
                         Icon(Icons.Default.SkipNext, contentDescription = "Next", modifier = Modifier.size(36.dp))
                     }
-                    IconButton(onClick = { MusicPlayer.cycleRepeat() }) {
-                        Icon(
-                            if (state.repeatMode == Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
-                            contentDescription = "Repeat",
-                            tint = if (state.repeatMode != Player.REPEAT_MODE_OFF) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    ToggleIcon(
+                        if (state.repeatMode == Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
+                        "Repeat",
+                        state.repeatMode != Player.REPEAT_MODE_OFF,
+                    ) { MusicPlayer.cycleRepeat() }
                 }
 
                 Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceAround,
                 ) {
-                    PlayerPane.entries.forEach { p ->
-                        FilterChip(selected = pane == p, onClick = { pane = if (pane == p) null else p }, label = { Text(p.label) })
+                    ToggleIcon(Icons.Default.Speed, "Speed and pitch", state.speed != 1f || state.pitch != 1f) { showSound = true }
+                    ToggleIcon(Icons.Default.Timer, "Sleep timer", sleepAt > 0) { showSleep = true }
+                    ToggleIcon(Icons.AutoMirrored.Filled.QueueMusic, "Up next", pane == PlayerPane.QUEUE) {
+                        pane = if (pane == PlayerPane.QUEUE) null else PlayerPane.QUEUE
                     }
-                    FilterChip(
-                        selected = state.speed != 1f || state.pitch != 1f,
-                        onClick = { showSound = true },
-                        label = { Text("Speed ${"%.2f".format(state.speed).trimEnd('0').trimEnd('.')}×") },
-                    )
-                    FilterChip(selected = sleepAt > 0, onClick = { showSleep = true }, label = { Text("Sleep") })
+                    ToggleIcon(Icons.Default.Lyrics, "Lyrics", pane == PlayerPane.LYRICS) {
+                        pane = if (pane == PlayerPane.LYRICS) null else PlayerPane.LYRICS
+                    }
                 }
             }
         }
@@ -301,10 +350,16 @@ private fun SeekBar(position: Long, duration: Long) {
                 dragging = null
             },
             enabled = duration > 0,
+            colors = SliderDefaults.colors(inactiveTrackColor = MaterialTheme.colorScheme.outline),
         )
         Row {
-            Text(clock((fraction * duration).toLong()), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-            Text(clock(duration), style = MaterialTheme.typography.bodySmall)
+            Text(
+                clock((fraction * duration).toLong()),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            Text(clock(duration), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -332,18 +387,20 @@ private fun LyricsPane(lyrics: Lyrics?, position: Long) {
             }
             LazyColumn(
                 state = listState,
-                contentPadding = PaddingValues(vertical = 24.dp),
+                contentPadding = PaddingValues(20.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(MaterialTheme.shapes.large)
+                    .background(MaterialTheme.colorScheme.surfaceContainer),
             ) {
                 itemsIndexed(lyrics.lines) { i, line ->
                     val active = i == current
                     Text(
                         line.text.ifBlank { "♪" },
                         style = if (active) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleMedium,
-                        fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                        color = if (active || !lyrics.synced) MaterialTheme.colorScheme.onSurface
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (lyrics.synced && i <= current) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable(enabled = line.timeMs >= 0) { MusicPlayer.seekTo(line.timeMs) },
@@ -362,22 +419,17 @@ private fun QueuePane(queue: List<Song>, index: Int) {
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = index.coerceAtLeast(0))
     LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
         itemsIndexed(queue) { i, s ->
-            ListItem(
-                modifier = Modifier.clickable { MusicPlayer.skipTo(i) },
-                leadingContent = { Artwork(s.thumbnail, 40.dp) },
-                headlineContent = {
-                    Text(
-                        (if (i == index) "▶ " else "") + s.title,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        fontWeight = if (i == index) FontWeight.SemiBold else FontWeight.Normal,
-                    )
-                },
-                supportingContent = { Text(s.artist.ifBlank { "Unknown artist" }, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                trailingContent = if (i != index) {
-                    { IconButton(onClick = { MusicPlayer.removeAt(i) }) { Icon(Icons.Default.Close, contentDescription = "Remove") } }
-                } else {
-                    null
+            SongRow(
+                title = s.title,
+                subtitle = s.artist.ifBlank { "Unknown artist" },
+                artUrl = s.thumbnail,
+                onClick = { MusicPlayer.skipTo(i) },
+                trailing = {
+                    if (i == index) {
+                        Icon(Icons.Default.GraphicEq, contentDescription = "Playing", tint = MaterialTheme.colorScheme.primary)
+                    } else {
+                        IconButton(onClick = { MusicPlayer.removeAt(i) }) { Icon(Icons.Default.Close, contentDescription = "Remove") }
+                    }
                 },
             )
         }
