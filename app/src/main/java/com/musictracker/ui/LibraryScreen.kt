@@ -55,6 +55,7 @@ enum class GroupBy(val label: String, val keyOf: (PlayRow) -> String) {
     ARTISTS("Artists", { Stats.artistOf(it) }),
     APPS("Apps", { it.sourceApp }),
     LANGUAGES("Languages", { it.language }),
+    GENRES("Genres", { it.genre.ifBlank { "Not found yet" } }),
 }
 
 enum class SortBy(val label: String) {

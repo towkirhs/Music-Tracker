@@ -109,6 +109,7 @@ fun HistoryScreen(vm: MainViewModel, plays: List<PlayRow>, onOpenSong: (Long) ->
                         Stats.time(row.startedAt),
                         Stats.duration(row.playedMs),
                     ).joinToString("  |  "),
+                    artUrl = row.coverUrl,
                     onClick = { onOpenSong(row.trackId) },
                     trailing = {
                         IconButton(onClick = { toDelete = row }) {

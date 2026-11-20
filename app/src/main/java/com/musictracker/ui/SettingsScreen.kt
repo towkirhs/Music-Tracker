@@ -60,6 +60,8 @@ fun SettingsScreen(vm: MainViewModel, onRequestAudio: () -> Unit) {
     val audioRunning by vm.audioRunning.collectAsStateWithLifecycle()
     var wifiOnly by remember { mutableStateOf(vm.wifiOnly()) }
     var token by remember { mutableStateOf(vm.geniusToken()) }
+    var lastFmKey by remember { mutableStateOf(vm.lastFmKey()) }
+    var lastFmUser by remember { mutableStateOf(vm.lastFmUser()) }
     val uriHandler = LocalUriHandler.current
     val lyricsLog by vm.lyricsLog.collectAsStateWithLifecycle()
     val update by vm.update.collectAsStateWithLifecycle()
@@ -274,6 +276,35 @@ fun SettingsScreen(vm: MainViewModel, onRequestAudio: () -> Unit) {
                     modifier = Modifier.fillMaxWidth(),
                 )
                 FilledTonalButton(onClick = { vm.saveGeniusToken(token) }) { Text("Save and test token") }
+            }
+        }
+        item {
+            Group("Last.fm: radio and discovery") {
+                Text(
+                    "Free. Radio, \"Because you listened to\" and artist suggestions come from Last.fm, and its tags " +
+                        "help tell a song's genre and whether it is Bangla, Hindi or English. Create an API account at " +
+                        "last.fm/api/account/create (any app name; leave callback empty), then paste the API key here. " +
+                        "Add your Last.fm username to also use what you listen to on Last.fm.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                TextButton(onClick = { uriHandler.openUri("https://www.last.fm/api/account/create") }) {
+                    Text("Open last.fm/api/account/create")
+                }
+                OutlinedTextField(
+                    value = lastFmKey,
+                    onValueChange = { lastFmKey = it },
+                    label = { Text("Last.fm API key") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = lastFmUser,
+                    onValueChange = { lastFmUser = it },
+                    label = { Text("Last.fm username (optional)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                FilledTonalButton(onClick = { vm.saveLastFm(lastFmKey, lastFmUser) }) { Text("Save and test") }
             }
         }
         item {

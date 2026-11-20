@@ -1,6 +1,7 @@
 package com.musictracker.data
 
 import android.content.Context
+import com.musictracker.online.Lookup
 
 /** All writes to the library go through here. */
 object Repo {
@@ -21,17 +22,24 @@ object Repo {
         val dao = dao(context)
         val key = SongText.key(title, artist)
         val trackId = dao.trackByKey(key)?.id ?: run {
+            val artistLanguage = if (artist.isBlank()) null else dao.languagesOfArtist(artist, -1)
+                .groupingBy { it }.eachCount().maxByOrNull { it.value }?.key
             val inserted = dao.insertTrack(
                 Track(
                     title = title,
                     artist = artist,
                     normalizedKey = key,
-                    language = SongText.language(title, artist),
+                    language = SongText.detectLanguage(title, artist, artistLanguage = artistLanguage),
                     labelRaw = labelRaw,
                     firstSeen = startedAt,
                 ),
             )
-            if (inserted > 0) inserted else dao.trackByKey(key)!!.id
+            if (inserted > 0) {
+                Lookup.kick(context)
+                inserted
+            } else {
+                dao.trackByKey(key)!!.id
+            }
         }
         return dao.insertPlay(
             Play(
@@ -53,12 +61,30 @@ object Repo {
         val track = dao.trackById(trackId) ?: return
         val key = SongText.key(title, artist)
         val other = dao.trackByKey(key)
+        val byUser = track.languageByUser || language != track.language
         if (other != null && other.id != trackId) {
             dao.movePlays(trackId, other.id)
-            dao.updateTrack(other.copy(isFavourite = other.isFavourite || track.isFavourite, language = language))
+            dao.updateTrack(
+                other.copy(
+                    isFavourite = other.isFavourite || track.isFavourite,
+                    language = language,
+                    languageByUser = other.languageByUser || byUser,
+                ),
+            )
             dao.deleteTrack(trackId)
         } else {
-            dao.updateTrack(track.copy(title = title, artist = artist, normalizedKey = key, language = language))
+            val renamed = key != track.normalizedKey
+            dao.updateTrack(
+                track.copy(
+                    title = title, artist = artist, normalizedKey = key, language = language, languageByUser = byUser,
+                    // A new name may be a different song: look it up again.
+                    lookedUpAt = if (renamed) 0 else track.lookedUpAt,
+                    coverUrl = if (renamed) "" else track.coverUrl,
+                    onlineTitle = if (renamed) "" else track.onlineTitle,
+                    onlineArtist = if (renamed) "" else track.onlineArtist,
+                ),
+            )
+            if (renamed) Lookup.kick(context)
         }
     }
 

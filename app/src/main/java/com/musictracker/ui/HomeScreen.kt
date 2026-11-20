@@ -218,7 +218,7 @@ fun HomeScreen(
                                 .clip(MaterialTheme.shapes.small)
                                 .clickable { onOpenSong(row.trackId) },
                         ) {
-                            Artwork(null, 128.dp, seed = row.title, shape = MaterialTheme.shapes.medium)
+                            Artwork(row.coverUrl, 128.dp, seed = row.title, shape = MaterialTheme.shapes.medium)
                             Text(
                                 row.title,
                                 style = MaterialTheme.typography.titleSmall,
@@ -269,6 +269,7 @@ fun HomeScreen(
                 padding = NoPadding,
                 title = row.title,
                 subtitle = listOf(row.artist.ifBlank { "Unknown artist" }, row.sourceApp).joinToString("  |  "),
+                artUrl = row.coverUrl,
                 onClick = { onOpenSong(row.trackId) },
                 trailing = {
                     Text(
@@ -295,7 +296,7 @@ private fun TopSongCard(song: SongStat, onClick: () -> Unit) {
             .clickable(onClick = onClick),
     ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Artwork(null, 72.dp, seed = song.title)
+            Artwork(song.coverUrl, 72.dp, seed = song.title)
             Column(
                 Modifier
                     .weight(1f)

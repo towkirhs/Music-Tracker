@@ -110,7 +110,8 @@ object Exporter {
                 JSONObject()
                     .put("id", it.id).put("title", it.title).put("artist", it.artist)
                     .put("normalizedKey", it.normalizedKey).put("language", it.language)
-                    .put("labelRaw", it.labelRaw).put("firstSeen", it.firstSeen).put("isFavourite", it.isFavourite),
+                    .put("labelRaw", it.labelRaw).put("firstSeen", it.firstSeen).put("isFavourite", it.isFavourite)
+                    .put("languageByUser", it.languageByUser),
             )
         }
         val plays = JSONArray()
@@ -137,7 +138,7 @@ object Exporter {
                 id = o.getLong("id"), title = o.getString("title"), artist = o.getString("artist"),
                 normalizedKey = o.getString("normalizedKey"), language = o.getString("language"),
                 labelRaw = o.optString("labelRaw"), firstSeen = o.getLong("firstSeen"),
-                isFavourite = o.optBoolean("isFavourite"),
+                isFavourite = o.optBoolean("isFavourite"), languageByUser = o.optBoolean("languageByUser"),
             )
         }
         val plays = (0 until playsJson.length()).map { i ->

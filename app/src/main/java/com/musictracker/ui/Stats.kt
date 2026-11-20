@@ -38,6 +38,8 @@ data class SongStat(
     val topSource: String,
     /** 0–100: plays in the last 90 days, plus 20 if you hearted it. */
     val score: Int,
+    val coverUrl: String = "",
+    val genre: String = "",
 )
 
 data class GroupStat(val name: String, val plays: Int, val ms: Long, val songs: Int)
@@ -69,6 +71,8 @@ object Stats {
                 firstSeen = first.firstSeen,
                 topSource = plays.groupingBy { it.sourceApp }.eachCount().maxByOrNull { it.value }?.key.orEmpty(),
                 score = (recent * 10 + if (first.isFavourite) 20 else 0).coerceAtMost(100),
+                coverUrl = first.coverUrl,
+                genre = first.genre,
             )
         }
     }

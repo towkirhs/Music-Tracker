@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [Track::class, Play::class, LabelSample::class, Unidentified::class, Recognition::class],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -46,13 +46,24 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Version 4 adds cover, genre, the name found online and a "language set by you" flag. Keeps the whole library. */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                listOf("coverUrl", "genre", "onlineTitle", "onlineArtist").forEach {
+                    db.execSQL("ALTER TABLE `tracks` ADD COLUMN `$it` TEXT NOT NULL DEFAULT ''")
+                }
+                db.execSQL("ALTER TABLE `tracks` ADD COLUMN `lookedUpAt` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `tracks` ADD COLUMN `languageByUser` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun get(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     "music_tracker.db",
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
             }
     }
 }

@@ -43,8 +43,8 @@ jobs:
           files: MusicTracker-0.${{ github.run_number }}.apk
 
       # Pictures of every screen with sample songs, to check the look without a phone.
-      - name: Render screenshots
-        run: ./gradlew testDebugUnitTest --tests '*ScreenshotTest*'
+      - name: Run tests and render screenshots
+        run: ./gradlew testDebugUnitTest
 
       - uses: actions/upload-artifact@v4
         if: always()

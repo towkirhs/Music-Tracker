@@ -25,6 +25,9 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Radio
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -104,20 +107,56 @@ fun SongDialog(trackId: Long, plays: List<PlayRow>, vm: MainViewModel, onDismiss
                 }
             }
             Text(
+                listOf(first.genre, first.language).filter { it.isNotBlank() }.joinToString("  ·  "),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 12.dp),
+            )
+            Text(
                 "First heard ${Stats.date(first.firstSeen)} · last ${Stats.date(rows.maxOf { it.startedAt })}\nHeard on: $apps",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
             )
+            val onlineName = first.onlineTitle.isNotBlank() &&
+                SongText.key(first.onlineTitle, first.onlineArtist) != SongText.key(first.title, first.artist)
+            if (onlineName) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 24.dp, end = 24.dp, bottom = 12.dp),
+                ) {
+                    Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Found online as", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            Text(
+                                "${first.onlineTitle} · ${first.onlineArtist}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        TextButton(onClick = {
+                            vm.editTrack(trackId, first.onlineTitle, first.onlineArtist, first.language)
+                            onDismiss()
+                        }) { Text("Use this name") }
+                    }
+                }
+            }
             HorizontalDivider(Modifier.padding(horizontal = 24.dp), color = MaterialTheme.colorScheme.outline)
             SheetAction(Icons.Default.PlayCircle, "Play here") {
-                MusicPlayer.play(context, listOf(Song(null, first.title, first.artist)))
+                MusicPlayer.play(context, listOf(Song(null, first.title, first.artist, first.coverUrl.ifBlank { null })))
                 onDismiss()
                 onOpenPlayer()
             }
             SheetAction(Icons.AutoMirrored.Filled.PlaylistPlay, "Play next") {
-                MusicPlayer.playNext(context, Song(null, first.title, first.artist))
+                MusicPlayer.playNext(context, Song(null, first.title, first.artist, first.coverUrl.ifBlank { null }))
                 vm.toast("Plays next")
+            }
+            SheetAction(Icons.Default.Radio, "Start radio") {
+                vm.startSongRadio(first.title, first.artist)
+                onDismiss()
             }
             SheetAction(Icons.AutoMirrored.Filled.OpenInNew, "Open on YouTube") {
                 val url = SongText.youtubeUrl(title, artist)

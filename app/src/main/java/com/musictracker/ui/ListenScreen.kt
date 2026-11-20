@@ -15,6 +15,20 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material3.Button
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.filled.Radio
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import com.musictracker.online.LastFm
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Search
@@ -47,13 +61,25 @@ import com.musictracker.player.MusicPlayer
 import com.musictracker.player.Song
 
 /** Library songs as a play queue (the player finds each one on YouTube Music when it starts). */
-fun List<SongStat>.toSongs(): List<Song> = map { Song(videoId = null, title = it.title, artist = it.artist) }
+fun List<SongStat>.toSongs(): List<Song> = map { Song(videoId = null, title = it.title, artist = it.artist, thumbnail = it.coverUrl.ifBlank { null }) }
 
 /** The built-in player's home: search YouTube Music, play your library, recognise a song. */
 @Composable
-fun ListenScreen(vm: MainViewModel, plays: List<PlayRow>, onRecognize: () -> Unit, onOpenPlayer: () -> Unit) {
+fun ListenScreen(
+    vm: MainViewModel,
+    plays: List<PlayRow>,
+    searchRequest: Int,
+    onRecognize: () -> Unit,
+    onOpenPlayer: () -> Unit,
+    onGoSettings: () -> Unit,
+) {
     val context = LocalContext.current
     val focus = LocalFocusManager.current
+    val searchFocus = remember { FocusRequester() }
+    LaunchedEffect(searchRequest) { if (searchRequest > 0) searchFocus.requestFocus() }
+    val discover by vm.discover.collectAsStateWithLifecycle()
+    val radioName by vm.radioName.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { vm.loadDiscover() }
     var query by rememberSaveable { mutableStateOf("") }
     val search by vm.search.collectAsStateWithLifecycle()
     val songs = remember(plays) { Stats.songs(plays, Range.ALL) }
@@ -114,7 +140,9 @@ fun ListenScreen(vm: MainViewModel, plays: List<PlayRow>, onRecognize: () -> Uni
                         TextButton(onClick = { query = ""; vm.clearSearch() }) { Text("Clear") }
                     }
                 },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(searchFocus),
             )
         }
 
@@ -162,24 +190,189 @@ fun ListenScreen(vm: MainViewModel, plays: List<PlayRow>, onRecognize: () -> Uni
                     }
                 }
             }
+            discoverItems(discover, radioName, vm, onGoSettings, onOpenPlayer)
             if (recent.isNotEmpty()) item { SectionTitle("Recently heard") }
             itemsIndexed(recent.take(20), key = { _, s -> "h" + s.trackId }) { i, s ->
                 SongRow(
                     padding = NoPadding,
                     title = s.title,
                     subtitle = s.artist.ifBlank { "Unknown artist" },
+                    artUrl = s.coverUrl,
                     onClick = {
                         MusicPlayer.play(context, recent.take(50).toSongs(), i)
                         onOpenPlayer()
                     },
                     trailing = {
                         IconButton(onClick = {
-                            MusicPlayer.addToQueue(context, Song(null, s.title, s.artist))
+                            MusicPlayer.addToQueue(context, Song(null, s.title, s.artist, s.coverUrl.ifBlank { null }))
                             vm.toast("Added to queue")
                         }) { Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = "Add to queue") }
                     },
                 )
             }
+        }
+    }
+}
+
+/** Radio and Last.fm suggestions, between your library buttons and your recent songs. */
+private fun LazyListScope.discoverItems(
+    discover: DiscoverState,
+    radioName: String?,
+    vm: MainViewModel,
+    onGoSettings: () -> Unit,
+    onOpenPlayer: () -> Unit,
+) {
+    item { SectionTitle("Radio") }
+    if (discover.needsKey) {
+        item {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text("Discover with Last.fm", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Radio and suggestions based on what you listen to. Add your free Last.fm API key in Settings.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                    Button(onClick = onGoSettings, modifier = Modifier.padding(top = 12.dp)) { Text("Open Settings") }
+                }
+            }
+        }
+        return
+    }
+    item {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            item { RadioCard("Your radio", "From your top songs", highlight = true) { vm.startMyRadio() } }
+            item { RadioCard("Bangla radio", "Top Bangla songs") { vm.startTagRadio("Bangla", "bangla") } }
+            item { RadioCard("Hindi radio", "Top Hindi songs") { vm.startTagRadio("Hindi", "hindi") } }
+        }
+    }
+    if (radioName != null) {
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Radio, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                Text(
+                    "Playing $radioName",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 8.dp),
+                )
+                TextButton(onClick = onOpenPlayer) { Text("Open player") }
+            }
+        }
+    }
+    if (discover.loading) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+    discover.error?.let { message ->
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = { vm.loadDiscover(force = true) }) { Text("Try again") }
+            }
+        }
+    }
+    discover.basedOn?.let { seed ->
+        item {
+            SectionTitle("Because you listened to ${seed.title}", action = "Radio") {
+                vm.startSongRadio(seed.title, seed.artist)
+            }
+        }
+        suggestionRows("similar", discover.similar.take(6), vm, onOpenPlayer)
+    }
+    if (discover.artists.isNotEmpty()) {
+        item { SectionTitle("Artists for you") }
+        item {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                items(discover.artists, key = { it }) { artist ->
+                    Column(
+                        Modifier
+                            .width(80.dp)
+                            .clip(MaterialTheme.shapes.small)
+                            .clickable { vm.startArtistRadio(artist) },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        InitialAvatar(artist, 80.dp)
+                        Text(
+                            artist,
+                            style = MaterialTheme.typography.titleSmall,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                        Text("Radio", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+    }
+    if (discover.bangla.isNotEmpty()) {
+        item { SectionTitle("Top Bangla", action = "Radio") { vm.startTagRadio("Bangla", "bangla") } }
+        suggestionRows("bangla", discover.bangla.take(5), vm, onOpenPlayer)
+    }
+    if (discover.hindi.isNotEmpty()) {
+        item { SectionTitle("Top Hindi", action = "Radio") { vm.startTagRadio("Hindi", "hindi") } }
+        suggestionRows("hindi", discover.hindi.take(5), vm, onOpenPlayer)
+    }
+}
+
+/** Suggested songs; tapping one plays the list from there. */
+private fun LazyListScope.suggestionRows(prefix: String, tracks: List<LastFm.Track>, vm: MainViewModel, onOpenPlayer: () -> Unit) {
+    val songs = tracks.map { Song(videoId = null, title = it.title, artist = it.artist) }
+    itemsIndexed(songs, key = { i, s -> "$prefix$i-${s.query}" }) { i, song ->
+        val context = LocalContext.current
+        SongRow(
+            padding = NoPadding,
+            title = song.title,
+            subtitle = song.artist.ifBlank { "Unknown artist" },
+            onClick = {
+                MusicPlayer.play(context, songs, i)
+                onOpenPlayer()
+            },
+            trailing = {
+                IconButton(onClick = {
+                    MusicPlayer.addToQueue(context, song)
+                    vm.toast("Added to queue")
+                }) { Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = "Add to queue") }
+            },
+        )
+    }
+}
+
+@Composable
+private fun RadioCard(title: String, subtitle: String, highlight: Boolean = false, onClick: () -> Unit) {
+    Card(
+        colors = if (highlight) {
+            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary)
+        } else {
+            CardDefaults.cardColors()
+        },
+        modifier = Modifier
+            .width(156.dp)
+            .clickable(onClick = onClick),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Icon(
+                Icons.Default.Radio,
+                contentDescription = null,
+                tint = if (highlight) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
+            )
+            Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 12.dp))
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (highlight) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

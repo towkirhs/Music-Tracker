@@ -1,5 +1,6 @@
 package com.musictracker.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -18,6 +19,17 @@ data class Track(
     val labelRaw: String,
     val firstSeen: Long,
     val isFavourite: Boolean = false,
+    /** Album cover found online, or "". */
+    @ColumnInfo(defaultValue = "") val coverUrl: String = "",
+    /** Genre found online, e.g. "Bollywood", or "". */
+    @ColumnInfo(defaultValue = "") val genre: String = "",
+    /** The song's proper name as found online, offered in the song menu when it differs. */
+    @ColumnInfo(defaultValue = "") val onlineTitle: String = "",
+    @ColumnInfo(defaultValue = "") val onlineArtist: String = "",
+    /** When the song was looked up online; 0 = not yet. */
+    @ColumnInfo(defaultValue = "0") val lookedUpAt: Long = 0,
+    /** True once you pick the language yourself; the app then never changes it. */
+    @ColumnInfo(defaultValue = "0") val languageByUser: Boolean = false,
 )
 
 /** One listen of a track that lasted at least 10 seconds. */
@@ -90,6 +102,10 @@ data class PlayRow(
     val language: String,
     val isFavourite: Boolean,
     val firstSeen: Long,
+    val coverUrl: String,
+    val genre: String,
+    val onlineTitle: String,
+    val onlineArtist: String,
 )
 
 data class TitleArtist(val title: String, val artist: String)

@@ -61,7 +61,9 @@ interface MusicDao {
         SELECT p.id AS playId, p.trackId AS trackId, p.startedAt AS startedAt, p.playedMs AS playedMs,
                p.sourceApp AS sourceApp, p.detector AS detector,
                t.title AS title, t.artist AS artist, t.language AS language,
-               t.isFavourite AS isFavourite, t.firstSeen AS firstSeen
+               t.isFavourite AS isFavourite, t.firstSeen AS firstSeen,
+               t.coverUrl AS coverUrl, t.genre AS genre,
+               t.onlineTitle AS onlineTitle, t.onlineArtist AS onlineArtist
         FROM plays p JOIN tracks t ON t.id = p.trackId
         ORDER BY p.startedAt DESC
         """,
@@ -73,12 +75,36 @@ interface MusicDao {
         SELECT p.id AS playId, p.trackId AS trackId, p.startedAt AS startedAt, p.playedMs AS playedMs,
                p.sourceApp AS sourceApp, p.detector AS detector,
                t.title AS title, t.artist AS artist, t.language AS language,
-               t.isFavourite AS isFavourite, t.firstSeen AS firstSeen
+               t.isFavourite AS isFavourite, t.firstSeen AS firstSeen,
+               t.coverUrl AS coverUrl, t.genre AS genre,
+               t.onlineTitle AS onlineTitle, t.onlineArtist AS onlineArtist
         FROM plays p JOIN tracks t ON t.id = p.trackId
         ORDER BY p.startedAt DESC
         """,
     )
     suspend fun allPlayRows(): List<PlayRow>
+
+    // Online lookup (covers, genre, proper name, language)
+
+    @Query("SELECT * FROM tracks WHERE lookedUpAt = 0 ORDER BY firstSeen DESC LIMIT :limit")
+    suspend fun tracksToLookUp(limit: Int): List<Track>
+
+    @Query(
+        "UPDATE tracks SET coverUrl = :coverUrl, genre = :genre, onlineTitle = :onlineTitle, " +
+            "onlineArtist = :onlineArtist, lookedUpAt = :at WHERE id = :id",
+    )
+    suspend fun setLookup(id: Long, coverUrl: String, genre: String, onlineTitle: String, onlineArtist: String, at: Long)
+
+    /** Changes the language only if you haven't picked one yourself. */
+    @Query("UPDATE tracks SET language = :language WHERE id = :id AND languageByUser = 0")
+    suspend fun setAutoLanguage(id: Long, language: String)
+
+    /** Looks songs without a genre up again (after a Last.fm key is added, its tags can fill it in). */
+    @Query("UPDATE tracks SET lookedUpAt = 0 WHERE genre = ''")
+    suspend fun relookUpWithoutGenre()
+
+    @Query("SELECT language FROM tracks WHERE artist = :artist AND id != :exceptId AND language != 'English/other'")
+    suspend fun languagesOfArtist(artist: String, exceptId: Long): List<String>
 
     // Restore from a backup file
 

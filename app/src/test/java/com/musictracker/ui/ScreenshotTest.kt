@@ -3,6 +3,9 @@ package com.musictracker.ui
 import android.app.Application
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -14,6 +17,7 @@ import com.github.takahirom.roborazzi.captureScreenRoboImage
 import com.musictracker.data.AppDatabase
 import com.musictracker.data.Play
 import com.musictracker.data.Track
+import com.musictracker.online.LastFm
 import com.musictracker.player.MusicPlayer
 import com.musictracker.player.PlayerState
 import com.musictracker.player.Song
@@ -59,13 +63,18 @@ class ScreenshotTest {
         seed()
         setPlaying() // so the mini player shows above the tabs
         val openPlayer = MutableStateFlow(false)
+        val vm = MainViewModel(ApplicationProvider.getApplicationContext())
         rule.setContent {
-            MusicTrackerTheme { MusicTrackerApp(onRequestAudio = {}, openPlayer = openPlayer) }
+            MusicTrackerTheme { MusicTrackerApp(onRequestAudio = {}, openPlayer = openPlayer, vm = vm) }
         }
         rule.waitUntil(10_000) { rule.onAllNodesWithText("Tum Hi Ho").fetchSemanticsNodes().isNotEmpty() }
 
         shot("01-home")
         shot("02-listen") { tap("Listen") }
+        shot("02b-listen-discover") {
+            showDiscover(vm)
+            rule.onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("Artists for you"))
+        }
         shot("03-library") { tap("Library") }
         shot("04-library-artists") { tap("Artists") }
         shot("05-song-sheet") {
@@ -89,6 +98,24 @@ class ScreenshotTest {
         shot("12-player-queue") { tapIcon("Up next") }
 
         if (errors.isNotEmpty()) throw AssertionError(errors.joinToString("\n"))
+    }
+
+    /** What the Listen tab shows once Last.fm suggestions have loaded (CI has no Last.fm key). */
+    private fun showDiscover(vm: MainViewModel) {
+        val field = MainViewModel::class.java.getDeclaredField("_discover").apply { isAccessible = true }
+        @Suppress("UNCHECKED_CAST")
+        val flow = field.get(vm) as MutableStateFlow<DiscoverState>
+        flow.value = DiscoverState(
+            basedOn = LastFm.Track("Tum Hi Ho", "Arijit Singh"),
+            similar = listOf(
+                LastFm.Track("Sunn Raha Hai", "Ankit Tiwari"),
+                LastFm.Track("Hasi", "Ami Mishra"),
+                LastFm.Track("Muskurane", "Arijit Singh"),
+            ),
+            artists = listOf("Ankit Tiwari", "Mohit Chauhan", "Shreya Ghoshal", "Armaan Malik"),
+            bangla = listOf(LastFm.Track("Bhalo Lagar Gaan", "Shironamhin"), LastFm.Track("Ekla Cholo Re", "Rabindranath Tagore")),
+            hindi = listOf(LastFm.Track("Kesariya", "Arijit Singh")),
+        )
     }
 
     private fun setPlaying() {
@@ -130,6 +157,11 @@ class ScreenshotTest {
                     labelRaw = title,
                     firstSeen = now - (i + 2) * 24 * hour,
                     isFavourite = i % 3 == 0,
+                    // Already looked up, so the test doesn't go online.
+                    lookedUpAt = now,
+                    genre = listOf("Bollywood", "Indian Pop", "Bengali", "Pop")[i % 4],
+                    onlineTitle = if (i == 0) title else "",
+                    onlineArtist = if (i == 0) "Arijit Singh & Mithoon" else "",
                 ),
             )
             repeat(songs.size - i + 1) { n ->

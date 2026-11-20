@@ -19,6 +19,9 @@ import com.musictracker.export.Exporter
 import com.musictracker.tracking.Prefs
 import kotlinx.coroutines.Dispatchers
 import com.musictracker.data.Recognition
+import com.musictracker.online.LastFm
+import com.musictracker.online.Lookup
+import com.musictracker.player.Radio
 import com.musictracker.player.Song
 import com.musictracker.player.YouTube
 import com.musictracker.update.Updater
@@ -37,6 +40,19 @@ enum class ExportKind(val mime: String, val fileName: String, val done: String) 
     BACKUP("application/json", "music-tracker-backup.json", "Backup saved"),
     LAB_CSV("text/csv", "label-lab.csv", "Label lab text saved"),
 }
+
+/** Discovery in the Listen tab, from Last.fm. */
+data class DiscoverState(
+    val loading: Boolean = false,
+    val needsKey: Boolean = false,
+    val error: String? = null,
+    /** The song the suggestions are based on, and songs like it. */
+    val basedOn: LastFm.Track? = null,
+    val similar: List<LastFm.Track> = emptyList(),
+    val artists: List<String> = emptyList(),
+    val bangla: List<LastFm.Track> = emptyList(),
+    val hindi: List<LastFm.Track> = emptyList(),
+)
 
 /** Search results in the Listen tab. */
 data class SearchState(
@@ -233,6 +249,131 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun autoUpdateCheck(): Boolean = Prefs.autoUpdateCheck(context)
     fun setAutoUpdateCheck(on: Boolean) = Prefs.setAutoUpdateCheck(context, on)
+
+    // Covers, genre and names from online lookups
+
+    init {
+        Lookup.kick(app)
+    }
+
+    // Last.fm: discovery and radio
+
+    fun lastFmKey(): String = Prefs.lastFmKey(context)
+    fun lastFmUser(): String = Prefs.lastFmUser(context)
+
+    fun saveLastFm(key: String, user: String) {
+        viewModelScope.launch {
+            val k = key.trim()
+            val u = user.trim()
+            if (k.isEmpty()) {
+                Prefs.setLastFm(context, "", u)
+                _discover.value = DiscoverState(needsKey = true)
+                return@launch toast("Last.fm key removed")
+            }
+            val keyOk = withContext(Dispatchers.IO) { LastFm.test(k) }
+            if (!keyOk) return@launch toast("Last.fm didn't accept that key (check it and the internet)")
+            val userOk = u.isEmpty() || withContext(Dispatchers.IO) { LastFm.userExists(k, u) }
+            Prefs.setLastFm(context, k, if (userOk) u else "")
+            toast(if (userOk) "Last.fm connected" else "Key works, but Last.fm has no user called $u")
+            // Songs looked up before the key can now get genre and language from Last.fm tags.
+            dao.relookUpWithoutGenre()
+            Lookup.kick(context)
+            loadDiscover(force = true)
+        }
+    }
+
+    private val _discover = MutableStateFlow(DiscoverState())
+    val discover: StateFlow<DiscoverState> = _discover
+    private var discoverJob: Job? = null
+
+    /** Loads suggestions once per app session (or again with [force]). */
+    fun loadDiscover(force: Boolean = false) {
+        val key = Prefs.lastFmKey(context)
+        if (key.isBlank()) {
+            _discover.value = DiscoverState(needsKey = true)
+            return
+        }
+        val current = _discover.value
+        if (!force && (current.loading || current.basedOn != null || current.bangla.isNotEmpty())) return
+        discoverJob?.cancel()
+        _discover.value = DiscoverState(loading = true)
+        val user = Prefs.lastFmUser(context)
+        val month = Stats.songs(plays.value, Range.MONTH).sortedByDescending { it.plays }
+        val myArtists = Stats.groups(Stats.inRange(plays.value, Range.MONTH), Stats::artistOf)
+            .sortedByDescending { it.plays }.map { it.name }.filter { it != "Unknown artist" }
+        discoverJob = viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val lastFmTop = if (user.isBlank()) emptyList() else runCatching { LastFm.userTopTracks(key, user, 5) }.getOrDefault(emptyList())
+                    // Your most played song this month here, or on Last.fm when this library is new.
+                    val seeds = month.take(3).map { LastFm.Track(it.title, it.artist) } + lastFmTop
+                    var basedOn: LastFm.Track? = null
+                    var similar = emptyList<LastFm.Track>()
+                    for (seed in seeds) {
+                        similar = LastFm.similarTracks(key, seed.title, seed.artist, 15)
+                        if (similar.isNotEmpty()) {
+                            basedOn = seed
+                            break
+                        }
+                    }
+                    val lastFmArtists = if (user.isBlank()) emptyList() else runCatching { LastFm.userTopArtists(key, user, 5) }.getOrDefault(emptyList())
+                    val known = (myArtists + lastFmArtists).map { it.lowercase() }.toSet()
+                    val artists = (myArtists.take(3) + lastFmArtists.take(2)).distinct()
+                        .flatMap { runCatching { LastFm.similarArtists(key, it, 8) }.getOrDefault(emptyList()) }
+                        .distinctBy { it.lowercase() }
+                        .filter { it.lowercase() !in known }
+                        .take(12)
+                    DiscoverState(
+                        basedOn = basedOn,
+                        similar = similar,
+                        artists = artists,
+                        bangla = LastFm.tagTopTracks(key, "bangla", 10),
+                        hindi = LastFm.tagTopTracks(key, "hindi", 10),
+                    )
+                }
+            }
+            _discover.value = result.getOrElse {
+                DiscoverState(error = if (it is LastFm.BadKey) it.message else "Couldn't load suggestions. Check your internet.")
+            }
+        }
+    }
+
+    val radioName: StateFlow<String?> = Radio.name
+
+    private fun radio(name: String, playSeedsFirst: Boolean = false, seeds: suspend () -> List<LastFm.Track>) {
+        viewModelScope.launch {
+            toast("Starting $name\u2026")
+            val list = withContext(Dispatchers.IO) { runCatching { seeds() }.getOrDefault(emptyList()) }
+            Radio.start(context, name, list, playSeedsFirst)?.let { toast(it) }
+        }
+    }
+
+    /** Radio of songs like this one. */
+    fun startSongRadio(title: String, artist: String) = radio("$title radio") { listOf(LastFm.Track(title, artist)) }
+
+    /** Radio from what you listen to most here (and on Last.fm, if your username is set). */
+    fun startMyRadio() {
+        val mine = Stats.songs(plays.value, Range.MONTH).sortedByDescending { it.plays }.take(5)
+            .map { LastFm.Track(it.title, it.artist) }
+        val user = Prefs.lastFmUser(context)
+        val key = Prefs.lastFmKey(context)
+        radio("Your radio") {
+            val fromLastFm = if (user.isBlank() || key.isBlank()) emptyList() else LastFm.userTopTracks(key, user, 5)
+            (mine + fromLastFm).shuffled()
+        }
+    }
+
+    /** Radio from an artist's best-known songs and songs like them. */
+    fun startArtistRadio(artist: String) {
+        val key = Prefs.lastFmKey(context)
+        radio("$artist radio", playSeedsFirst = true) { if (key.isBlank()) emptyList() else LastFm.artistTopTracks(key, artist, 5) }
+    }
+
+    /** Radio from a Last.fm tag's chart, e.g. "bangla" or "hindi". */
+    fun startTagRadio(label: String, tag: String) {
+        val key = Prefs.lastFmKey(context)
+        radio("$label radio", playSeedsFirst = true) { if (key.isBlank()) emptyList() else LastFm.tagTopTracks(key, tag, 15) }
+    }
 
     fun toast(text: String) = Toast.makeText(context, text, Toast.LENGTH_LONG).show()
 }

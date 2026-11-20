@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.IconButton
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.Button
@@ -84,6 +87,8 @@ fun MusicTrackerApp(
     var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
     var openSong by remember { mutableStateOf<Long?>(null) }
     var showRecognize by rememberSaveable { mutableStateOf(false) }
+    // Bumped by the search button so the Listen tab puts the cursor in its search box.
+    var searchRequest by remember { mutableIntStateOf(0) }
     val showPlayer by openPlayer.collectAsStateWithLifecycle()
     val plays by vm.plays.collectAsStateWithLifecycle()
     val update by vm.update.collectAsStateWithLifecycle()
@@ -109,6 +114,11 @@ fun MusicTrackerApp(
                             style = MaterialTheme.typography.headlineSmall,
                             modifier = Modifier.padding(start = 12.dp),
                         )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { tab = Tab.LISTEN; searchRequest++ }) {
+                        Icon(Icons.Default.Search, contentDescription = "Search music")
                     }
                 },
             )
@@ -148,7 +158,13 @@ fun MusicTrackerApp(
                     onRecognize = { showRecognize = true },
                     updateAvailable = update as? Updater.State.Available,
                 )
-                Tab.LISTEN -> ListenScreen(vm, plays, onRecognize = { showRecognize = true }, onOpenPlayer = onOpenPlayer)
+                Tab.LISTEN -> ListenScreen(
+                    vm, plays,
+                    searchRequest = searchRequest,
+                    onRecognize = { showRecognize = true },
+                    onOpenPlayer = onOpenPlayer,
+                    onGoSettings = { tab = Tab.SETTINGS },
+                )
                 Tab.LIBRARY -> LibraryScreen(plays, onOpenSong = { openSong = it }, onOpenPlayer = onOpenPlayer)
                 Tab.STATS -> StatsScreen(plays, onOpenSong = { openSong = it })
                 Tab.HISTORY -> HistoryScreen(vm, plays, onOpenSong = { openSong = it })
@@ -244,6 +260,7 @@ fun SongItem(
             detail ?: "${song.plays} plays · ${Stats.duration(song.ms)}",
         ).joinToString("  |  "),
         onClick = onClick,
+        artUrl = song.coverUrl,
         rank = rank,
         onPlay = onPlay,
         padding = padding,

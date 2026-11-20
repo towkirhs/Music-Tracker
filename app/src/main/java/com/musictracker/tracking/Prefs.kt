@@ -75,6 +75,15 @@ object Prefs {
     fun setGeniusToken(context: Context, token: String) =
         prefs(context).edit().putString(KEY_GENIUS, token.trim()).apply()
 
+    private const val KEY_LASTFM_KEY = "lastfm_key"
+    private const val KEY_LASTFM_USER = "lastfm_user"
+
+    /** Free Last.fm API key for discovery, radio and tags; "" when not set. */
+    fun lastFmKey(context: Context): String = prefs(context).getString(KEY_LASTFM_KEY, "").orEmpty()
+    fun lastFmUser(context: Context): String = prefs(context).getString(KEY_LASTFM_USER, "").orEmpty()
+    fun setLastFm(context: Context, key: String, user: String) =
+        prefs(context).edit().putString(KEY_LASTFM_KEY, key.trim()).putString(KEY_LASTFM_USER, user.trim()).apply()
+
     private const val KEY_SHAZAM = "shazam_reels"
     private const val KEY_RECOGNIZED_TO_LIBRARY = "recognized_to_library"
     private const val KEY_COUNT_PLAYER = "count_player"
