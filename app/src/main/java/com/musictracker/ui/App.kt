@@ -177,7 +177,7 @@ fun MusicTrackerApp(
         SongDialog(trackId = id, plays = plays, vm = vm, onDismiss = { openSong = null }, onOpenPlayer = onOpenPlayer)
     }
     if (showRecognize) RecognizeScreen(vm, onDismiss = { showRecognize = false }, onOpenPlayer = onOpenPlayer)
-    if (showPlayer) PlayerScreen(onDismiss = { openPlayer.value = false })
+    if (showPlayer) PlayerScreen(vm, onDismiss = { openPlayer.value = false })
 }
 
 @Composable

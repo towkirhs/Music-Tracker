@@ -9,6 +9,8 @@ import com.musictracker.data.AppDatabase
 import com.musictracker.data.LabelSample
 import com.musictracker.data.PlayRow
 import com.musictracker.data.Repo
+import com.musictracker.data.SongText
+import com.musictracker.data.Track
 import com.musictracker.data.Unidentified
 import com.musictracker.audio.AudioCaptureService
 import com.musictracker.lyrics.Genius
@@ -30,6 +32,7 @@ import com.musictracker.player.Song
 import com.musictracker.player.YouTube
 import com.musictracker.update.Updater
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -152,6 +155,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun dismissUnidentified(item: Unidentified) {
         viewModelScope.launch { Repo.dismissUnidentified(context, item.id) }
     }
+
+    /** The library song for a song in the player, for its heart button. */
+    fun libraryTrack(title: String, artist: String): Flow<Track?> = dao.observeTrackByKey(SongText.key(title, artist))
 
     fun setFavourite(trackId: Long, favourite: Boolean) {
         viewModelScope.launch { Repo.setFavourite(context, trackId, favourite) }

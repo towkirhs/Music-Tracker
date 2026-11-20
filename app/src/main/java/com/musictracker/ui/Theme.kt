@@ -56,6 +56,9 @@ private val colors = darkColorScheme(
     onErrorContainer = Color(0xFFFF9C9C),
 )
 
+/** The full player's background, from near-black at the top to deep blue at the bottom. */
+val PlayerGradient = listOf(Color(0xFF050608), Color(0xFF0E1120), Color(0xFF1B2140))
+
 /** Colours for the art tiles shown where a song has no cover. */
 val ArtPalette = listOf(
     Color(0xFFFF8216) to Color(0xFFE5375B),

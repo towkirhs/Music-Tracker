@@ -122,8 +122,8 @@ class ScreenshotTest {
             tap("Home")
             openPlayer.value = true
         }
-        shot("11-player-lyrics") { tapIcon("Lyrics") }
-        shot("12-player-queue") { tapIcon("Up next") }
+        shot("11-player-lyrics") { tap("Lyrics") }
+        shot("12-player-expanded") { tapIcon("Expand") }
 
         if (errors.isNotEmpty()) throw AssertionError(errors.joinToString("\n"))
     }

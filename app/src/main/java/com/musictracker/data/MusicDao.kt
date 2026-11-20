@@ -86,6 +86,10 @@ interface MusicDao {
 
     // Online lookup (covers, genre, proper name, language)
 
+    /** The library song with this key, kept up to date (null when it isn't in the library). */
+    @Query("SELECT * FROM tracks WHERE normalizedKey = :key")
+    fun observeTrackByKey(key: String): Flow<Track?>
+
     @Query("SELECT * FROM tracks WHERE lookedUpAt = 0 ORDER BY firstSeen DESC LIMIT :limit")
     suspend fun tracksToLookUp(limit: Int): List<Track>
 
