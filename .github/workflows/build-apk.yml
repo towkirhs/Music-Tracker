@@ -52,3 +52,13 @@ jobs:
           name: screenshots
           path: app/build/screenshots
           if-no-files-found: ignore
+
+      # Also kept on the "screenshots" branch (branch builds only), where they are easy to fetch.
+      - name: Push screenshots to the screenshots branch
+        if: always() && github.ref != 'refs/heads/main'
+        run: |
+          cd app/build/screenshots
+          git init -q -b screenshots
+          git add .
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "Screenshots of ${{ github.sha }}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" screenshots
