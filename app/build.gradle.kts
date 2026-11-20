@@ -109,6 +109,8 @@ dependencies {
     implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.27.1")
     // Album art.
     implementation("io.coil-kt:coil-compose:2.7.0")
+    // Tiny web server for the website on your home Wi-Fi.
+    implementation("org.nanohttpd:nanohttpd:2.3.1")
 
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.3")
 

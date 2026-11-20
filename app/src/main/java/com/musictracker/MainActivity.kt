@@ -19,6 +19,8 @@ import com.musictracker.audio.Notifications
 import com.musictracker.player.MusicPlayer
 import com.musictracker.ui.MusicTrackerApp
 import com.musictracker.ui.MusicTrackerTheme
+import com.musictracker.web.WebService
+import com.musictracker.tracking.Prefs
 import com.musictracker.update.Updater
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -54,6 +56,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         MusicPlayer.connect(this)
+        if (Prefs.webOn(this)) WebService.start(this)
         if (savedInstanceState == null) {
             handleIntent(intent)
             lifecycleScope.launch { Updater.checkIfDue(this@MainActivity) }

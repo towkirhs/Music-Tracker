@@ -111,7 +111,7 @@ object Exporter {
                     .put("id", it.id).put("title", it.title).put("artist", it.artist)
                     .put("normalizedKey", it.normalizedKey).put("language", it.language)
                     .put("labelRaw", it.labelRaw).put("firstSeen", it.firstSeen).put("isFavourite", it.isFavourite)
-                    .put("languageByUser", it.languageByUser),
+                    .put("languageByUser", it.languageByUser).put("coverUrl", it.coverUrl).put("genre", it.genre),
             )
         }
         val plays = JSONArray()

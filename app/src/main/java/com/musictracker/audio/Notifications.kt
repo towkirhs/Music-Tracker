@@ -13,6 +13,8 @@ import com.musictracker.R
 object Notifications {
     private const val CHANNEL_LISTENING = "listening"
     private const val CHANNEL_RESUME = "resume"
+    private const val CHANNEL_WEB = "web"
+    const val ID_WEB = 3
     const val ID_LISTENING = 1
     private const val ID_RESUME = 2
     const val ACTION_RESUME_AUDIO = "com.musictracker.RESUME_AUDIO"
@@ -22,6 +24,12 @@ object Notifications {
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_LISTENING, "Listening", NotificationManager.IMPORTANCE_MIN).apply {
                 description = "Shown while Music Tracker can hear songs for lyrics recognition"
+                setShowBadge(false)
+            },
+        )
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL_WEB, "Web on your PC", NotificationManager.IMPORTANCE_MIN).apply {
+                description = "Shown while the Music Tracker website is open to your home Wi-Fi"
                 setShowBadge(false)
             },
         )
@@ -49,6 +57,18 @@ object Notifications {
             .setSmallIcon(R.drawable.ic_tile)
             .setContentTitle("Music Tracker is listening")
             .setContentText("Recognising songs that have no name on screen")
+            .setOngoing(true)
+            .setSilent(true)
+            .setContentIntent(openApp(context, null))
+            .build()
+    }
+
+    fun web(context: Context, address: String): Notification {
+        ensureChannels(context)
+        return NotificationCompat.Builder(context, CHANNEL_WEB)
+            .setSmallIcon(R.drawable.ic_tile)
+            .setContentTitle("Music Tracker website is on")
+            .setContentText("Open $address on a computer on this Wi-Fi")
             .setOngoing(true)
             .setSilent(true)
             .setContentIntent(openApp(context, null))

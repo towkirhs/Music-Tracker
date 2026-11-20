@@ -42,6 +42,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.musictracker.BuildConfig
 import com.musictracker.lyrics.ModelManager
 import com.musictracker.update.Updater
+import com.musictracker.tracking.Prefs
+import com.musictracker.web.WebService
 
 @Composable
 fun SettingsScreen(vm: MainViewModel, onRequestAudio: () -> Unit) {
@@ -90,6 +92,8 @@ fun SettingsScreen(vm: MainViewModel, onRequestAudio: () -> Unit) {
     val ytSignedIn by vm.ytSignedIn.collectAsStateWithLifecycle()
     var showYtSignIn by remember { mutableStateOf(false) }
     val importState by vm.importState.collectAsStateWithLifecycle()
+    val webRunning by WebService.running.collectAsStateWithLifecycle()
+    var webCode by remember { mutableStateOf(Prefs.webCode(context)) }
 
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
@@ -394,6 +398,38 @@ fun SettingsScreen(vm: MainViewModel, onRequestAudio: () -> Unit) {
                     if (importState.running) LinearProgressIndicator(Modifier.fillMaxWidth())
                     Text(importState.message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
                 }
+            }
+        }
+        item {
+            Group("Website on your computer") {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Open on home Wi-Fi", modifier = Modifier.weight(1f))
+                    Switch(
+                        checked = webRunning,
+                        onCheckedChange = { if (it) WebService.start(context) else WebService.stop(context) },
+                    )
+                }
+                if (webRunning) {
+                    val address = remember(refresh) { WebService.address(context) }
+                    Text(
+                        address ?: "Connect the phone to Wi-Fi to get its address",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text("Code: $webCode", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "On a computer on the same Wi-Fi, type that address in the browser and enter the code once. " +
+                            "You can see your stats, edit songs, and play music. It stays on until you switch it off.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    TextButton(onClick = { webCode = Prefs.newWebCode(context) }) { Text("Make a new code") }
+                }
+                Text(
+                    "Away from home: the same website is at towkirhs.github.io/Music-Tracker for playing music and radio, " +
+                        "and for opening a backup file.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                TextButton(onClick = { uriHandler.openUri("https://towkirhs.github.io/Music-Tracker/") }) { Text("Open the website") }
             }
         }
         item {

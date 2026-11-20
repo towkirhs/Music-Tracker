@@ -124,6 +124,19 @@ object Prefs {
     fun ytMusicCookie(context: Context): String = prefs(context).getString(KEY_YTM_COOKIE, "").orEmpty()
     fun setYtMusicCookie(context: Context, cookie: String) = prefs(context).edit().putString(KEY_YTM_COOKIE, cookie).apply()
 
+    private const val KEY_WEB_ON = "web_on"
+    private const val KEY_WEB_CODE = "web_code"
+
+    fun webOn(context: Context): Boolean = prefs(context).getBoolean(KEY_WEB_ON, false)
+    fun setWebOn(context: Context, on: Boolean) = prefs(context).edit().putBoolean(KEY_WEB_ON, on).apply()
+
+    /** 6-digit code the website asks for once, so only you can open your library from your Wi-Fi. */
+    fun webCode(context: Context): String = prefs(context).getString(KEY_WEB_CODE, null) ?: newWebCode(context)
+    fun newWebCode(context: Context): String =
+        (100_000 + java.security.SecureRandom().nextInt(900_000)).toString().also {
+            prefs(context).edit().putString(KEY_WEB_CODE, it).apply()
+        }
+
     private const val KEY_SHAZAM = "shazam_reels"
     private const val KEY_RECOGNIZED_TO_LIBRARY = "recognized_to_library"
     private const val KEY_COUNT_PLAYER = "count_player"

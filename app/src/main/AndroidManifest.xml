@@ -11,6 +11,7 @@
 
     <!-- Built-in player: keeps playing in the background with notification controls. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!-- Update button: installs the newer APK from this app's GitHub releases. -->
@@ -69,6 +70,16 @@
             android:name=".audio.AudioCaptureService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
+
+        <!-- The website on your home Wi-Fi, while you switch it on in Settings. -->
+        <service
+            android:name=".web.WebService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Serves the app's own dashboard to the user's computer on their home Wi-Fi" />
+        </service>
 
         <!-- Built-in player. -->
         <service
