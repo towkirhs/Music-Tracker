@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -164,7 +165,8 @@ fun SongDialog(trackId: Long, plays: List<PlayRow>, vm: MainViewModel, onDismiss
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         FilledTonalButton(onClick = { val t = title; title = artist; artist = t }, modifier = Modifier.weight(1f)) {
-                            Text("Swap title and artist")
+                            Icon(Icons.Default.SwapHoriz, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Text("Swap names", modifier = Modifier.padding(start = 8.dp))
                         }
                         Button(
                             enabled = title.isNotBlank(),

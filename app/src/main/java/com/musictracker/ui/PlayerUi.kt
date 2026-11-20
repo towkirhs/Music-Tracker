@@ -20,7 +20,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Lyrics
@@ -350,7 +352,22 @@ private fun SeekBar(position: Long, duration: Long) {
                 dragging = null
             },
             enabled = duration > 0,
-            colors = SliderDefaults.colors(inactiveTrackColor = MaterialTheme.colorScheme.outline),
+            thumb = {
+                Box(
+                    Modifier
+                        .size(16.dp)
+                        .background(MaterialTheme.colorScheme.primary, CircleShape),
+                )
+            },
+            track = { sliderState ->
+                SliderDefaults.Track(
+                    sliderState = sliderState,
+                    modifier = Modifier.height(4.dp),
+                    colors = SliderDefaults.colors(inactiveTrackColor = MaterialTheme.colorScheme.outline),
+                    drawStopIndicator = null,
+                    thumbTrackGapSize = 0.dp,
+                )
+            },
         )
         Row {
             Text(

@@ -57,6 +57,7 @@ class ScreenshotTest {
     @Test
     fun screens() {
         seed()
+        setPlaying() // so the mini player shows above the tabs
         val openPlayer = MutableStateFlow(false)
         rule.setContent {
             MusicTrackerTheme { MusicTrackerApp(onRequestAudio = {}, openPlayer = openPlayer) }
@@ -82,7 +83,6 @@ class ScreenshotTest {
         shot("09-settings") { tap("Settings") }
         shot("10-player") {
             tap("Home")
-            setPlaying()
             openPlayer.value = true
         }
         shot("11-player-lyrics") { tapIcon("Lyrics") }
