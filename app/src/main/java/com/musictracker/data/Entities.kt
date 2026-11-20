@@ -60,6 +60,23 @@ data class Unidentified(
     val guessArtist: String,
 )
 
+/** A song named by the Recognise button (Shazam-style), newest first in its history. */
+@Entity(tableName = "recognitions", indices = [Index("recognizedAt")])
+data class Recognition(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val recognizedAt: Long,
+    val title: String,
+    val artist: String,
+    val album: String,
+    val coverUrl: String,
+    /** "Microphone" or "This phone". */
+    val heardFrom: String,
+    val shazamUrl: String,
+    val spotifyUrl: String,
+    val appleMusicUrl: String,
+    val youtubeVideoId: String,
+)
+
 /** A play joined with its track, which is what every screen shows. */
 data class PlayRow(
     val playId: Long,

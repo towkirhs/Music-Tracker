@@ -74,4 +74,36 @@ object Prefs {
 
     fun setGeniusToken(context: Context, token: String) =
         prefs(context).edit().putString(KEY_GENIUS, token.trim()).apply()
+
+    private const val KEY_SHAZAM = "shazam_reels"
+    private const val KEY_RECOGNIZED_TO_LIBRARY = "recognized_to_library"
+    private const val KEY_COUNT_PLAYER = "count_player"
+    private const val KEY_AUTO_UPDATE = "auto_update_check"
+    private const val KEY_LAST_UPDATE_CHECK = "last_update_check"
+    private const val KEY_SPEED = "player_speed"
+    private const val KEY_PITCH = "player_pitch"
+
+    /** Name unlabelled reels by their audio fingerprint (Shazam) before trying lyrics. Needs internet. */
+    fun isShazamOn(context: Context): Boolean = prefs(context).getBoolean(KEY_SHAZAM, true)
+    fun setShazamOn(context: Context, on: Boolean) = prefs(context).edit().putBoolean(KEY_SHAZAM, on).apply()
+
+    /** Songs named with the Recognise button also go into the library as a play. */
+    fun recognizedToLibrary(context: Context): Boolean = prefs(context).getBoolean(KEY_RECOGNIZED_TO_LIBRARY, true)
+    fun setRecognizedToLibrary(context: Context, on: Boolean) =
+        prefs(context).edit().putBoolean(KEY_RECOGNIZED_TO_LIBRARY, on).apply()
+
+    /** Songs played in the built-in player count in the library and stats. */
+    fun countPlayer(context: Context): Boolean = prefs(context).getBoolean(KEY_COUNT_PLAYER, true)
+    fun setCountPlayer(context: Context, on: Boolean) = prefs(context).edit().putBoolean(KEY_COUNT_PLAYER, on).apply()
+
+    fun autoUpdateCheck(context: Context): Boolean = prefs(context).getBoolean(KEY_AUTO_UPDATE, true)
+    fun setAutoUpdateCheck(context: Context, on: Boolean) = prefs(context).edit().putBoolean(KEY_AUTO_UPDATE, on).apply()
+
+    fun lastUpdateCheck(context: Context): Long = prefs(context).getLong(KEY_LAST_UPDATE_CHECK, 0L)
+    fun setLastUpdateCheck(context: Context, at: Long) = prefs(context).edit().putLong(KEY_LAST_UPDATE_CHECK, at).apply()
+
+    fun playerSpeed(context: Context): Float = prefs(context).getFloat(KEY_SPEED, 1f)
+    fun playerPitch(context: Context): Float = prefs(context).getFloat(KEY_PITCH, 1f)
+    fun setPlayerSpeedPitch(context: Context, speed: Float, pitch: Float) =
+        prefs(context).edit().putFloat(KEY_SPEED, speed).putFloat(KEY_PITCH, pitch).apply()
 }

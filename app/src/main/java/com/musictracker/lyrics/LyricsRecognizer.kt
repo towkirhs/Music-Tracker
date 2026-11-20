@@ -6,6 +6,7 @@ import com.musictracker.audio.AudioCaptureService
 import com.musictracker.data.AppDatabase
 import com.musictracker.data.Repo
 import com.musictracker.data.Unidentified
+import com.musictracker.recognize.Shazam
 import com.musictracker.tracking.Heard
 import com.musictracker.tracking.Prefs
 import kotlinx.coroutines.Dispatchers
@@ -15,7 +16,8 @@ import kotlinx.coroutines.withContext
 import kotlin.math.sqrt
 
 /**
- * Names a song that has no label on screen (covers, "Original audio") from its lyrics:
+ * Names a song that has no label on screen (covers, "Original audio") from its sound:
+ * 0. Its audio fingerprint is looked up with Shazam (needs internet; Settings can turn it off).
  * 1. Whisper turns the last 15 seconds of audio into text, on the phone.
  * 2. The text is matched against song titles already in your library (offline).
  * 3. If that fails and you added a Genius token, Genius is searched with a few lyric words.
@@ -36,14 +38,12 @@ object LyricsRecognizer {
     private val junkLines = setOf("thank you", "music", "applause", "you", "bye")
     private val junkPhrases = listOf("thanks for watching", "subscribe", "amara.org", "subtitles by")
 
-    fun canRun(context: Context): Boolean =
-        Prefs.isLyricsOn(context) && ModelManager.isReady(context) &&
-            AudioCaptureService.running.value && AudioBuffer.isFlowing()
+    fun canRun(context: Context): Boolean = whyNot(context) == null
 
     /** Why recognition can't run right now, or null if it can. */
     fun whyNot(context: Context): String? = when {
         !Prefs.isLyricsOn(context) -> "lyrics recognition is off"
-        !ModelManager.isReady(context) -> "speech model not downloaded yet"
+        !ModelManager.isReady(context) && !Prefs.isShazamOn(context) -> "speech model not downloaded yet"
         !AudioCaptureService.running.value -> "audio not allowed right now (tap Allow audio)"
         !AudioBuffer.isFlowing() -> "audio permission is on but no sound is arriving"
         else -> null
@@ -60,6 +60,21 @@ object LyricsRecognizer {
             LyricsLog.add("Test: ${samples.size / AudioBuffer.SAMPLE_RATE} s of audio, loudness ${level(samples)}")
             if (samples.size < AudioBuffer.SAMPLE_RATE * 3 || rms(samples) < 0.004f) {
                 LyricsLog.add("Test: audio is silent. Play a reel with sound, or that app may block audio capture")
+                return@withContext
+            }
+            if (Prefs.isShazamOn(context)) {
+                val clip = lastSounding(AudioBuffer.last(30), 12)
+                val r = withContext(Dispatchers.IO) { Shazam.recognize(clip) }
+                LyricsLog.add(
+                    when (r) {
+                        is Shazam.Result.Found -> "Test: Shazam heard ${r.song.title} - ${r.song.artist}"
+                        Shazam.Result.NoMatch -> "Test: Shazam found no match"
+                        is Shazam.Result.Failed -> "Test: Shazam couldn't search (${r.reason})"
+                    },
+                )
+            }
+            if (!ModelManager.isReady(context)) {
+                LyricsLog.add("Test: speech model not downloaded, so lyrics were not transcribed")
                 return@withContext
             }
             val start = System.currentTimeMillis()
@@ -97,6 +112,28 @@ object LyricsRecognizer {
             }
             if (rms(samples) < 0.004f) {
                 LyricsLog.add("$appName: audio is silent (loudness ${level(samples)}). The app may block audio capture")
+                return@withContext Outcome.NoMatch
+            }
+            if (Prefs.isShazamOn(context)) {
+                val clip = if (samples.size > AudioBuffer.SAMPLE_RATE * 12) {
+                    samples.copyOfRange(samples.size - AudioBuffer.SAMPLE_RATE * 12, samples.size)
+                } else {
+                    samples
+                }
+                when (val r = withContext(Dispatchers.IO) { Shazam.recognize(clip) }) {
+                    is Shazam.Result.Found -> {
+                        LyricsLog.add("$appName: Shazam named it: ${r.song.title} - ${r.song.artist}")
+                        return@withContext Outcome.Found(
+                            Heard(r.song.title, r.song.artist, "shazam: ${r.song.title} - ${r.song.artist}", appName, "shazam"),
+                        )
+                    }
+                    Shazam.Result.NoMatch -> LyricsLog.add("$appName: Shazam found no match")
+                    is Shazam.Result.Failed -> LyricsLog.add("$appName: Shazam couldn't search (${r.reason})")
+                }
+            }
+            if (!ModelManager.isReady(context)) {
+                if (!lastTry) LyricsLog.add("$appName: trying Shazam again at 16 s with more audio")
+                else LyricsLog.add("$appName: not named (download the speech model to also try lyrics)")
                 return@withContext Outcome.NoMatch
             }
             val start = System.currentTimeMillis()

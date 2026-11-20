@@ -127,4 +127,18 @@ interface MusicDao {
 
     @Query("DELETE FROM label_samples")
     suspend fun clearSamples()
+
+    // Recognise button history
+
+    @Insert
+    suspend fun insertRecognition(item: Recognition): Long
+
+    @Query("SELECT * FROM recognitions ORDER BY recognizedAt DESC LIMIT 200")
+    fun observeRecognitions(): Flow<List<Recognition>>
+
+    @Query("DELETE FROM recognitions WHERE id = :id")
+    suspend fun deleteRecognition(id: Long)
+
+    @Query("DELETE FROM recognitions")
+    suspend fun clearRecognitions()
 }

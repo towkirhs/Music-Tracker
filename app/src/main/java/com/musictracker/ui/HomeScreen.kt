@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ListItem
@@ -42,15 +43,20 @@ fun HomeScreen(
     onOpenSong: (Long) -> Unit,
     onGoSettings: () -> Unit,
     onRequestAudio: () -> Unit,
+    onRecognize: () -> Unit,
+    updateAvailable: com.musictracker.update.Updater.State.Available?,
 ) {
     val context = LocalContext.current
     val listening by vm.listening.collectAsStateWithLifecycle()
     val lyricsOn by vm.lyricsOn.collectAsStateWithLifecycle()
     val model by vm.model.collectAsStateWithLifecycle()
     val audioRunning by vm.audioRunning.collectAsStateWithLifecycle()
+    val shazamOn by vm.shazamOn.collectAsStateWithLifecycle()
+    // Unnamed reels can be recognised by Shazam alone, or by lyrics once the speech model is ready.
+    val canRecognise = lyricsOn == true && (shazamOn || model is com.musictracker.lyrics.ModelManager.State.Ready)
     val toggle: (Boolean) -> Unit = { turnOn ->
         vm.setListening(turnOn)
-        if (turnOn && lyricsOn == true && model is com.musictracker.lyrics.ModelManager.State.Ready) onRequestAudio()
+        if (turnOn && canRecognise) onRequestAudio()
     }
     var refresh by remember { mutableIntStateOf(0) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { refresh++ }
@@ -91,7 +97,36 @@ fun HomeScreen(
                 }
             }
         }
-        if (on && lyricsOn == true && model is com.musictracker.lyrics.ModelManager.State.Ready && !audioRunning) {
+        if (updateAvailable != null) {
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text(
+                            "Update available: ${updateAvailable.release.name}",
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        )
+                        Button(onClick = { vm.installUpdate(updateAvailable.release) }, modifier = Modifier.padding(top = 8.dp)) {
+                            Text("Update now")
+                        }
+                    }
+                }
+            }
+        }
+        item {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("What's this song?", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Name music around you or on this phone, like Shazam.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    FilledTonalButton(onClick = onRecognize) { Text("Recognise") }
+                }
+            }
+        }
+        if (on && canRecognise && !audioRunning) {
             item {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
                     Column(Modifier.padding(16.dp)) {

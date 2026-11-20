@@ -18,6 +18,12 @@ import com.musictracker.lyrics.LyricsRecognizer
 import com.musictracker.export.Exporter
 import com.musictracker.tracking.Prefs
 import kotlinx.coroutines.Dispatchers
+import com.musictracker.data.Recognition
+import com.musictracker.player.Song
+import com.musictracker.player.YouTube
+import com.musictracker.update.Updater
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -31,6 +37,14 @@ enum class ExportKind(val mime: String, val fileName: String, val done: String) 
     BACKUP("application/json", "music-tracker-backup.json", "Backup saved"),
     LAB_CSV("text/csv", "label-lab.csv", "Label lab text saved"),
 }
+
+/** Search results in the Listen tab. */
+data class SearchState(
+    val query: String = "",
+    val loading: Boolean = false,
+    val results: List<Song> = emptyList(),
+    val error: String? = null,
+)
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val dao = AppDatabase.get(app).music()
@@ -147,5 +161,78 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun toast(text: String) = Toast.makeText(context, text, Toast.LENGTH_LONG).show()
+    // Built-in player
+
+    private val _search = MutableStateFlow(SearchState())
+    val search: StateFlow<SearchState> = _search
+    private var searchJob: Job? = null
+
+    fun searchSongs(query: String) {
+        val q = query.trim()
+        if (q.isEmpty()) return clearSearch()
+        searchJob?.cancel()
+        _search.value = SearchState(query = q, loading = true)
+        searchJob = viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) { runCatching { YouTube.search(q) } }
+            _search.value = result.fold(
+                onSuccess = { SearchState(query = q, results = it) },
+                onFailure = { SearchState(query = q, error = "Search failed: ${it.message ?: "check your internet"}") },
+            )
+        }
+    }
+
+    fun clearSearch() {
+        searchJob?.cancel()
+        _search.value = SearchState()
+    }
+
+    fun countPlayer(): Boolean = Prefs.countPlayer(context)
+    fun setCountPlayer(on: Boolean) = Prefs.setCountPlayer(context, on)
+
+    // Recognise button
+
+    val recognitions: StateFlow<List<Recognition>> = dao.observeRecognitions()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun deleteRecognition(item: Recognition) {
+        viewModelScope.launch { dao.deleteRecognition(item.id) }
+    }
+
+    fun clearRecognitions() {
+        viewModelScope.launch { dao.clearRecognitions() }
+    }
+
+    private val _shazamOn = MutableStateFlow(Prefs.isShazamOn(app))
+    /** Name unlabelled reels by their sound fingerprint. */
+    val shazamOn: StateFlow<Boolean> = _shazamOn
+
+    fun setShazamOn(on: Boolean) {
+        Prefs.setShazamOn(context, on)
+        _shazamOn.value = on
+    }
+
+    fun recognizedToLibrary(): Boolean = Prefs.recognizedToLibrary(context)
+    fun setRecognizedToLibrary(on: Boolean) = Prefs.setRecognizedToLibrary(context, on)
+
+    // Updates
+
+    val update: StateFlow<Updater.State> = Updater.state
+
+    fun checkForUpdate() {
+        viewModelScope.launch { Updater.check(context) }
+    }
+
+    fun installUpdate(release: Updater.Release) {
+        if (!Updater.canInstall(context)) {
+            toast("Allow Music Tracker to install apps, then tap Update again")
+            Updater.openInstallPermission(context)
+            return
+        }
+        viewModelScope.launch { Updater.downloadAndInstall(context, release) }
+    }
+
+    fun autoUpdateCheck(): Boolean = Prefs.autoUpdateCheck(context)
+    fun setAutoUpdateCheck(on: Boolean) = Prefs.setAutoUpdateCheck(context, on)
+
+    fun toast(text: String) = Toast.makeText(context, text, Toast.LENGTH_LONG).show()
 }

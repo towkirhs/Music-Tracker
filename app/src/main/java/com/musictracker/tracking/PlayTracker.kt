@@ -41,6 +41,9 @@ object PlayTracker {
 
         /** Music apps report only on changes, so a whole song can pass between two reports. */
         MEDIA(20 * 60_000L),
+
+        /** Music Tracker's own player: counted even when Listening is off (Settings can turn it off). */
+        PLAYER(20 * 60_000L),
     }
 
     private class Record(var playId: Long? = null, var savedMs: Long = 0)
@@ -66,7 +69,8 @@ object PlayTracker {
     @Synchronized
     fun observe(context: Context, source: Source, heard: Heard?, alreadyPlayedMs: Long = 0) {
         appContext = context.applicationContext
-        if (!Prefs.isListening(context) || heard == null || heard.title.isBlank()) {
+        val allowed = if (source == Source.PLAYER) Prefs.countPlayer(context) else Prefs.isListening(context)
+        if (!allowed || heard == null || heard.title.isBlank()) {
             end(source)
             return
         }
@@ -105,7 +109,7 @@ object PlayTracker {
 
     @Synchronized
     fun endAll() {
-        Source.entries.forEach { end(it) }
+        Source.entries.filter { it != Source.PLAYER }.forEach { end(it) }
     }
 
     private fun tick(source: Source, session: Session, now: Long) {

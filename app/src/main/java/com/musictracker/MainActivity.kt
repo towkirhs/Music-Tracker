@@ -15,8 +15,13 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import com.musictracker.audio.AudioCaptureService
 import com.musictracker.audio.Notifications
+import com.musictracker.player.MusicPlayer
 import com.musictracker.ui.MusicTrackerApp
 import com.musictracker.ui.MusicTrackerTheme
+import com.musictracker.update.Updater
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -40,10 +45,14 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             MusicTrackerTheme {
-                MusicTrackerApp(onRequestAudio = ::requestAudio)
+                MusicTrackerApp(onRequestAudio = ::requestAudio, openPlayer = openPlayer)
             }
         }
-        if (savedInstanceState == null) handleIntent(intent)
+        MusicPlayer.connect(this)
+        if (savedInstanceState == null) {
+            handleIntent(intent)
+            lifecycleScope.launch { Updater.checkIfDue(this@MainActivity) }
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -53,6 +62,14 @@ class MainActivity : ComponentActivity() {
 
     private fun handleIntent(intent: Intent?) {
         if (intent?.action == Notifications.ACTION_RESUME_AUDIO) requestAudio()
+        if (intent?.action == ACTION_OPEN_PLAYER) openPlayer.value = true
+    }
+
+    /** Set when the player notification is tapped; the app then opens the full player. */
+    private val openPlayer = MutableStateFlow(false)
+
+    companion object {
+        const val ACTION_OPEN_PLAYER = "com.musictracker.OPEN_PLAYER"
     }
 
     private fun hasRecordPermission() =

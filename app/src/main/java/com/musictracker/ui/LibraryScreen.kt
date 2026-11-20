@@ -16,7 +16,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -30,10 +32,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.musictracker.data.PlayRow
+import com.musictracker.player.MusicPlayer
 import java.util.Locale
 
 enum class GroupBy(val label: String, val keyOf: (PlayRow) -> String) {
@@ -53,7 +57,8 @@ enum class SortBy(val label: String) {
 }
 
 @Composable
-fun LibraryScreen(plays: List<PlayRow>, onOpenSong: (Long) -> Unit) {
+fun LibraryScreen(plays: List<PlayRow>, onOpenSong: (Long) -> Unit, onOpenPlayer: () -> Unit) {
+    val context = LocalContext.current
     var range by rememberSaveable { mutableStateOf(Range.ALL) }
     var groupBy by rememberSaveable { mutableStateOf(GroupBy.SONGS) }
     var sortBy by rememberSaveable { mutableStateOf(SortBy.PLAYS) }
@@ -146,6 +151,20 @@ fun LibraryScreen(plays: List<PlayRow>, onOpenSong: (Long) -> Unit) {
         LazyColumn(Modifier.fillMaxWidth()) {
             if (showSongs) {
                 if (songs.isEmpty()) item { Empty() }
+                if (songs.isNotEmpty()) {
+                    item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 4.dp)) {
+                            FilledTonalButton(onClick = {
+                                MusicPlayer.play(context, songs.toSongs())
+                                onOpenPlayer()
+                            }) { Text("▶ Play ${songs.size}") }
+                            OutlinedButton(onClick = {
+                                MusicPlayer.play(context, songs.toSongs(), songs.indices.random(), shuffle = true)
+                                onOpenPlayer()
+                            }) { Text("Shuffle") }
+                        }
+                    }
+                }
                 items(songs, key = { it.trackId }) { song ->
                     SongItem(song, detail = detailFor(song, sortBy)) { onOpenSong(song.trackId) }
                 }

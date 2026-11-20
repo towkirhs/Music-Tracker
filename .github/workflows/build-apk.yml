@@ -2,7 +2,8 @@ name: Build APK
 
 on:
   push:
-    branches: [main]
+    # Every branch is built so changes are checked; only main publishes a release.
+    branches: ['**']
   workflow_dispatch:
 
 permissions:
@@ -33,6 +34,7 @@ jobs:
           path: MusicTracker-0.${{ github.run_number }}.apk
 
       - name: Publish release
+        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v0.${{ github.run_number }}

@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
@@ -47,9 +48,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.musictracker.update.Updater
+import kotlinx.coroutines.flow.MutableStateFlow
 
 enum class Tab(val label: String, val icon: ImageVector) {
     HOME("Home", Icons.Default.Home),
+    LISTEN("Listen", Icons.Default.PlayArrow),
     LIBRARY("Library", Icons.Default.Favorite),
     STATS("Stats", Icons.Default.Star),
     HISTORY("History", Icons.Default.DateRange),
@@ -57,32 +61,51 @@ enum class Tab(val label: String, val icon: ImageVector) {
 }
 
 @Composable
-fun MusicTrackerApp(onRequestAudio: () -> Unit, vm: MainViewModel = viewModel()) {
+fun MusicTrackerApp(
+    onRequestAudio: () -> Unit,
+    openPlayer: MutableStateFlow<Boolean>,
+    vm: MainViewModel = viewModel(),
+) {
     var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
     var openSong by remember { mutableStateOf<Long?>(null) }
+    var showRecognize by rememberSaveable { mutableStateOf(false) }
+    val showPlayer by openPlayer.collectAsStateWithLifecycle()
     val plays by vm.plays.collectAsStateWithLifecycle()
+    val update by vm.update.collectAsStateWithLifecycle()
+    val onOpenPlayer = { openPlayer.value = true }
 
     Scaffold(
         topBar = {
             TopAppBar(title = { Text(if (tab == Tab.HOME) "Music Tracker" else tab.label) })
         },
         bottomBar = {
-            NavigationBar {
-                Tab.entries.forEach { t ->
-                    NavigationBarItem(
-                        selected = tab == t,
-                        onClick = { tab = t },
-                        icon = { Icon(t.icon, contentDescription = null) },
-                        label = { Text(t.label) },
-                    )
+            Column {
+                MiniPlayer(onOpen = onOpenPlayer)
+                NavigationBar {
+                    Tab.entries.forEach { t ->
+                        NavigationBarItem(
+                            selected = tab == t,
+                            onClick = { tab = t },
+                            icon = { Icon(t.icon, contentDescription = null) },
+                            label = { Text(t.label, maxLines = 1) },
+                        )
+                    }
                 }
             }
         },
     ) { padding ->
         Box(Modifier.padding(padding)) {
             when (tab) {
-                Tab.HOME -> HomeScreen(vm, plays, onOpenSong = { openSong = it }, onGoSettings = { tab = Tab.SETTINGS }, onRequestAudio = onRequestAudio)
-                Tab.LIBRARY -> LibraryScreen(plays, onOpenSong = { openSong = it })
+                Tab.HOME -> HomeScreen(
+                    vm, plays,
+                    onOpenSong = { openSong = it },
+                    onGoSettings = { tab = Tab.SETTINGS },
+                    onRequestAudio = onRequestAudio,
+                    onRecognize = { showRecognize = true },
+                    updateAvailable = update as? Updater.State.Available,
+                )
+                Tab.LISTEN -> ListenScreen(vm, plays, onRecognize = { showRecognize = true }, onOpenPlayer = onOpenPlayer)
+                Tab.LIBRARY -> LibraryScreen(plays, onOpenSong = { openSong = it }, onOpenPlayer = onOpenPlayer)
                 Tab.STATS -> StatsScreen(plays, onOpenSong = { openSong = it })
                 Tab.HISTORY -> HistoryScreen(vm, plays, onOpenSong = { openSong = it })
                 Tab.SETTINGS -> SettingsScreen(vm, onRequestAudio = onRequestAudio)
@@ -90,7 +113,11 @@ fun MusicTrackerApp(onRequestAudio: () -> Unit, vm: MainViewModel = viewModel())
         }
     }
 
-    openSong?.let { id -> SongDialog(trackId = id, plays = plays, vm = vm, onDismiss = { openSong = null }) }
+    openSong?.let { id ->
+        SongDialog(trackId = id, plays = plays, vm = vm, onDismiss = { openSong = null }, onOpenPlayer = onOpenPlayer)
+    }
+    if (showRecognize) RecognizeScreen(vm, onDismiss = { showRecognize = false }, onOpenPlayer = onOpenPlayer)
+    if (showPlayer) PlayerScreen(onDismiss = { openPlayer.value = false })
 }
 
 @Composable

@@ -41,6 +41,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.musictracker.BuildConfig
 import com.musictracker.lyrics.ModelManager
+import com.musictracker.update.Updater
 
 @Composable
 fun SettingsScreen(vm: MainViewModel, onRequestAudio: () -> Unit) {
@@ -61,6 +62,11 @@ fun SettingsScreen(vm: MainViewModel, onRequestAudio: () -> Unit) {
     var token by remember { mutableStateOf(vm.geniusToken()) }
     val uriHandler = LocalUriHandler.current
     val lyricsLog by vm.lyricsLog.collectAsStateWithLifecycle()
+    val update by vm.update.collectAsStateWithLifecycle()
+    val shazamOn by vm.shazamOn.collectAsStateWithLifecycle()
+    var autoUpdate by remember { mutableStateOf(vm.autoUpdateCheck()) }
+    var countPlayer by remember { mutableStateOf(vm.countPlayer()) }
+    var recognizedToLibrary by remember { mutableStateOf(vm.recognizedToLibrary()) }
 
     val launchers = ExportKind.entries.associateWith { kind ->
         rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(kind.mime)) { uri ->
@@ -106,17 +112,104 @@ fun SettingsScreen(vm: MainViewModel, onRequestAudio: () -> Unit) {
             }
         }
         item {
-            Group("Recognise songs by lyrics") {
+            Group("Updates") {
+                Text("Music Tracker ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyLarge)
+                when (val u = update) {
+                    Updater.State.Idle -> {}
+                    Updater.State.Checking -> LinearProgressIndicator(Modifier.fillMaxWidth())
+                    is Updater.State.UpToDate -> Text("\u2713 You have the newest version.")
+                    is Updater.State.Available -> {
+                        Text("New version: ${u.release.name}", style = MaterialTheme.typography.bodyLarge)
+                        if (u.release.notes.isNotBlank()) {
+                            Text(u.release.notes.take(400), style = MaterialTheme.typography.bodySmall)
+                        }
+                        FilledTonalButton(onClick = { vm.installUpdate(u.release) }, modifier = Modifier.fillMaxWidth()) {
+                            Text("Update now (${u.release.sizeBytes / 1_000_000} MB)")
+                        }
+                    }
+                    is Updater.State.Downloading -> Column {
+                        Text("Downloading update: ${u.percent}%")
+                        LinearProgressIndicator(
+                            progress = { u.percent / 100f },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                        )
+                    }
+                    Updater.State.Installing -> Text("Confirm the install on the screen Android shows. Your library is kept.")
+                    is Updater.State.Failed -> Text(u.reason, style = MaterialTheme.typography.bodySmall)
+                }
+                if (update !is Updater.State.Available && update !is Updater.State.Downloading) {
+                    FilledTonalButton(onClick = { vm.checkForUpdate() }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Check for updates")
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Check once a day when the app opens", modifier = Modifier.weight(1f))
+                    Switch(checked = autoUpdate, onCheckedChange = { autoUpdate = it; vm.setAutoUpdateCheck(it) })
+                }
+                Text(
+                    "Updates come from this app's GitHub releases and install over this version, keeping your library. " +
+                        "The first time, Android asks you to allow Music Tracker to install apps.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+        item {
+            Group("Player and Recognise") {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Count songs played here")
+                        Text(
+                            "Songs you play in the Listen tab are added to your library and stats, even when Listening is off.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Switch(checked = countPlayer, onCheckedChange = { countPlayer = it; vm.setCountPlayer(it) })
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Add recognised songs to the library")
+                        Text(
+                            "Songs named with the Recognise button are logged as a play.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Switch(
+                        checked = recognizedToLibrary,
+                        onCheckedChange = { recognizedToLibrary = it; vm.setRecognizedToLibrary(it) },
+                    )
+                }
+                Text(
+                    "Songs play from YouTube Music, with no account and no ads. Played songs are cached (up to 512 MB) " +
+                        "so replays use no data. Lyrics come from LRCLIB.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+        item {
+            Group("Recognise songs with no name") {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Name covers and \"Original audio\" reels")
                         Text(
-                            "When a reel has no song name, the app listens to 15 seconds, turns the singing into " +
-                                "text on your phone (Whisper), and looks for the song. Free and offline; Genius is optional.",
+                            "When a reel has no song name, the app listens to it and looks the song up: first by its " +
+                                "sound (Shazam), then by turning the singing into text on your phone (Whisper).",
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
                     Switch(checked = lyricsOn == true, onCheckedChange = { vm.setLyrics(it) })
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Recognise by sound (Shazam)")
+                        Text(
+                            "Fast and works for songs without words. Sends a short sound fingerprint, never the audio, " +
+                                "over the internet. Works without the speech model.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Switch(checked = shazamOn, onCheckedChange = { vm.setShazamOn(it) })
                 }
                 when (val m = model) {
                     is ModelManager.State.Ready -> Row(verticalAlignment = Alignment.CenterVertically) {
@@ -155,7 +248,7 @@ fun SettingsScreen(vm: MainViewModel, onRequestAudio: () -> Unit) {
                     if (!audioRunning) FilledTonalButton(onClick = onRequestAudio) { Text("Allow audio") }
                 }
                 OutlinedButton(onClick = { vm.testLyrics() }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Test now: transcribe the last 15 seconds")
+                    Text("Test now: recognise the last 15 seconds")
                 }
                 Text("Recent activity", style = MaterialTheme.typography.labelLarge)
                 if (lyricsLog.isEmpty()) {

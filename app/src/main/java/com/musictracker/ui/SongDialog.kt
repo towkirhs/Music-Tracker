@@ -14,6 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -31,10 +32,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.musictracker.data.PlayRow
 import com.musictracker.data.SongText
+import com.musictracker.player.MusicPlayer
+import com.musictracker.player.Song
 
 /** Song details: stats, rename (merges duplicates), language, favourite, delete. */
 @Composable
-fun SongDialog(trackId: Long, plays: List<PlayRow>, vm: MainViewModel, onDismiss: () -> Unit) {
+fun SongDialog(trackId: Long, plays: List<PlayRow>, vm: MainViewModel, onDismiss: () -> Unit, onOpenPlayer: () -> Unit) {
     val rows = remember(plays, trackId) { plays.filter { it.trackId == trackId } }
     if (rows.isEmpty()) {
         LaunchedEffect(Unit) { onDismiss() }
@@ -65,6 +68,21 @@ fun SongDialog(trackId: Long, plays: List<PlayRow>, vm: MainViewModel, onDismiss
                 )
                 OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Title") }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = artist, onValueChange = { artist = it }, label = { Text("Artist") }, modifier = Modifier.fillMaxWidth())
+                FilledTonalButton(
+                    onClick = {
+                        MusicPlayer.play(context, listOf(Song(null, first.title, first.artist)))
+                        onDismiss()
+                        onOpenPlayer()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("▶ Play here") }
+                OutlinedButton(
+                    onClick = {
+                        MusicPlayer.playNext(context, Song(null, first.title, first.artist))
+                        vm.toast("Plays next")
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Play next") }
                 OutlinedButton(
                     onClick = {
                         val url = SongText.youtubeUrl(title, artist)

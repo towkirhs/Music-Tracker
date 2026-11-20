@@ -58,6 +58,8 @@ android {
     }
 
     compileOptions {
+        // NewPipe Extractor uses newer Java library APIs.
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -84,8 +86,22 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-core")
+    implementation("androidx.compose.material:material-icons-extended")
 
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
+
+    // Built-in player: background playback with notification and lock-screen controls.
+    val media3 = "1.5.1"
+    implementation("androidx.media3:media3-exoplayer:$media3")
+    implementation("androidx.media3:media3-session:$media3")
+    implementation("androidx.media3:media3-datasource-okhttp:$media3")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // Finds songs on YouTube Music and their audio streams, with no account or API key.
+    implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.27.1")
+    // Album art.
+    implementation("io.coil-kt:coil-compose:2.7.0")
+
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.3")
 }
