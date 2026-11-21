@@ -21,6 +21,8 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.filled.Radio
+import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
@@ -84,6 +86,8 @@ fun ListenScreen(
     val openPlaylist by vm.openPlaylist.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { vm.loadDiscover() }
     LaunchedEffect(ytSignedIn) { vm.loadYtLibrary() }
+    var showDevice by remember { mutableStateOf(false) }
+    if (showDevice) DeviceMusicScreen(onDismiss = { showDevice = false }, onOpenPlayer = onOpenPlayer)
     openPlaylist?.let { PlaylistScreen(it, vm, onDismiss = vm::closePlaylist, onOpenPlayer = onOpenPlayer) }
     var query by rememberSaveable { mutableStateOf("") }
     val search by vm.search.collectAsStateWithLifecycle()
@@ -192,6 +196,35 @@ fun ListenScreen(
                                 Text("Recently heard")
                             }
                         }
+                    }
+                }
+            }
+            item {
+                Card(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { showDevice = true },
+                ) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.PhoneAndroid,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(32.dp),
+                        )
+                        Column(
+                            Modifier
+                                .weight(1f)
+                                .padding(horizontal = 16.dp),
+                        ) {
+                            Text("On this phone", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "All music files on your phone, and songs you download. Plays without internet.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
                     }
                 }
             }

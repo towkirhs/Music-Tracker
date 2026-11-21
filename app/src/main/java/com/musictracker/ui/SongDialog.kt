@@ -26,6 +26,8 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Radio
+import androidx.compose.material.icons.filled.Download
+import com.musictracker.player.Downloads
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Button
@@ -153,6 +155,10 @@ fun SongDialog(trackId: Long, plays: List<PlayRow>, vm: MainViewModel, onDismiss
             SheetAction(Icons.AutoMirrored.Filled.PlaylistPlay, "Play next") {
                 MusicPlayer.playNext(context, Song(null, first.title, first.artist, first.coverUrl.ifBlank { null }))
                 vm.toast("Plays next")
+            }
+            SheetAction(Icons.Default.Download, "Download to this phone") {
+                Downloads.download(context, listOf(Song(null, first.title, first.artist, first.coverUrl.ifBlank { null })))
+                vm.toast("Downloading to Music/Music Tracker")
             }
             SheetAction(Icons.Default.Radio, "Start radio") {
                 vm.startSongRadio(first.title, first.artist)

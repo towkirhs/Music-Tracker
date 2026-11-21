@@ -38,7 +38,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.musictracker.player.Downloads
 import com.musictracker.player.MusicPlayer
+import androidx.compose.material3.TextButton
 
 private const val SIGN_IN_URL = "https://accounts.google.com/ServiceLogin?ltmpl=music&service=youtube&passive=true" +
     "&continue=https%3A%2F%2Fmusic.youtube.com%2F"
@@ -129,10 +131,16 @@ fun PlaylistScreen(state: PlaylistState, vm: MainViewModel, onDismiss: () -> Uni
                 }
                 if (state.songs.isNotEmpty()) {
                     item {
-                        ShufflePlayButtons(
-                            onShuffle = { play(state.songs.indices.random(), shuffle = true) },
-                            onPlay = { play(0, shuffle = false) },
-                        )
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            ShufflePlayButtons(
+                                onShuffle = { play(state.songs.indices.random(), shuffle = true) },
+                                onPlay = { play(0, shuffle = false) },
+                            )
+                            TextButton(onClick = {
+                                Downloads.download(context, state.songs)
+                                vm.toast("Downloading ${state.songs.size} songs to Music/Music Tracker")
+                            }) { Text("Download all to this phone") }
+                        }
                     }
                 }
                 if (state.loading) {

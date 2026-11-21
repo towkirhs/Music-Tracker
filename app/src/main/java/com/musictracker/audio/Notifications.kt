@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import com.musictracker.MainActivity
 import com.musictracker.R
 
@@ -14,6 +15,8 @@ object Notifications {
     private const val CHANNEL_LISTENING = "listening"
     private const val CHANNEL_RESUME = "resume"
     private const val CHANNEL_WEB = "web"
+    private const val CHANNEL_DOWNLOADS = "downloads"
+    const val ID_DOWNLOADS = 4
     const val ID_WEB = 3
     const val ID_LISTENING = 1
     private const val ID_RESUME = 2
@@ -24,6 +27,12 @@ object Notifications {
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_LISTENING, "Listening", NotificationManager.IMPORTANCE_MIN).apply {
                 description = "Shown while Music Tracker can hear songs for lyrics recognition"
+                setShowBadge(false)
+            },
+        )
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL_DOWNLOADS, "Downloads", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "Progress of songs being saved to your Music folder"
                 setShowBadge(false)
             },
         )
@@ -73,6 +82,21 @@ object Notifications {
             .setSilent(true)
             .setContentIntent(openApp(context, null))
             .build()
+    }
+
+    /** "Downloading Kesariya (2 more waiting)", with a progress bar; or a finished message. */
+    fun showDownload(context: Context, title: String, text: String, percent: Int?) {
+        ensureChannels(context)
+        val n = NotificationCompat.Builder(context, CHANNEL_DOWNLOADS)
+            .setSmallIcon(R.drawable.ic_tile)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setSilent(true)
+            .setOngoing(percent != null)
+            .apply { if (percent != null) setProgress(100, percent, percent < 0) }
+            .setContentIntent(openApp(context, null))
+            .build()
+        runCatching { NotificationManagerCompat.from(context).notify(ID_DOWNLOADS, n) } // no permission: skip quietly
     }
 
     fun showResume(context: Context) {

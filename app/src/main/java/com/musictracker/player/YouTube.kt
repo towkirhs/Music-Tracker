@@ -23,6 +23,8 @@ data class Song(
     val artist: String,
     val thumbnail: String? = null,
     val durationMs: Long = 0,
+    /** A music file on this phone (content:// address); played directly, no YouTube needed. */
+    val localUri: String? = null,
 ) {
     /** What to search for when there is no video yet. */
     val query: String get() = listOf(title, artist).filter { it.isNotBlank() }.joinToString(" ")
@@ -93,6 +95,18 @@ object YouTube {
             ?: error("no audio stream for this song")
         streamCache[videoId] = Resolved(stream.content, System.currentTimeMillis())
         return stream.content
+    }
+
+    /** The audio to save for [videoId]: its address and file type. M4A first, which every music app plays. */
+    fun downloadStream(videoId: String): Pair<String, String> {
+        init()
+        val info = StreamInfo.getInfo(ServiceList.YouTube, "https://www.youtube.com/watch?v=$videoId")
+        val stream = info.audioStreams
+            .filter { it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP && it.isUrl }
+            .maxByOrNull { (if (it.format?.getMimeType() == "audio/mp4") 1_000_000 else 0) + it.averageBitrate }
+            ?: error("no audio to download for this song")
+        val mime = stream.format?.getMimeType() ?: "audio/mp4"
+        return stream.content to mime
     }
 
     /** Drops a cached stream address (they expire), so the next play looks it up again. */

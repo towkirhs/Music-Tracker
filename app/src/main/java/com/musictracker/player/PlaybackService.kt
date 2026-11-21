@@ -13,6 +13,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.database.StandaloneDatabaseProvider
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
@@ -57,10 +58,12 @@ class PlaybackService : MediaSessionService() {
                 spec.withUri(Uri.parse(YouTube.audioUrl(id)))
             }
         }
-        val dataSource = CacheDataSource.Factory()
+        val streamed = CacheDataSource.Factory()
             .setCache(cache(this))
             .setUpstreamDataSourceFactory(resolving)
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+        // Files on the phone (content://) open directly; everything else goes through the cache above.
+        val dataSource = DefaultDataSource.Factory(this, streamed)
 
         val player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSource))
@@ -170,7 +173,7 @@ class PlaybackService : MediaSessionService() {
             }
 
         fun mediaItem(song: Song): MediaItem {
-            val uri = Uri.Builder().scheme(SCHEME).authority("play")
+            val uri = song.localUri?.let(Uri::parse) ?: Uri.Builder().scheme(SCHEME).authority("play")
                 .appendQueryParameter("v", song.videoId.orEmpty())
                 .appendQueryParameter("q", song.query)
                 .build()

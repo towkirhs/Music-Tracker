@@ -173,6 +173,7 @@ object MusicPlayer {
             artist = m.artist?.toString().orEmpty(),
             thumbnail = m.artworkUri?.toString(),
             durationMs = m.extras?.getLong("durationMs") ?: 0L,
+            localUri = mediaId.takeIf { it.startsWith("content://") },
         )
     }
 }

@@ -82,7 +82,10 @@ class ScreenshotTest {
 
         shot("01-home")
         shot("02-listen") { tap("Listen") }
+        shot("02a-on-this-phone") { tap("On this phone") }
         shot("02b-listen-discover") {
+            Espresso.pressBack() // close "On this phone"
+            rule.waitForIdle()
             showDiscover(vm)
             rule.onAllNodes(hasScrollAction()).onFirst().performScrollToNode(hasText("Artists for you"))
         }

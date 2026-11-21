@@ -87,6 +87,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
 import coil.compose.AsyncImage
+import com.musictracker.player.Downloads
 import com.musictracker.player.Lyrics
 import com.musictracker.player.MusicPlayer
 import com.musictracker.player.Song
@@ -243,6 +244,7 @@ fun PlayerScreen(vm: MainViewModel, onDismiss: () -> Unit) {
     var pane by remember { mutableStateOf(PlayerPane.QUEUE) }
     var expanded by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
+    val context = LocalContext.current
     var showSound by remember { mutableStateOf(false) }
     var showSleep by remember { mutableStateOf(false) }
     val sleepAt by MusicPlayer.sleepTimer.collectAsStateWithLifecycle()
@@ -295,6 +297,16 @@ fun PlayerScreen(vm: MainViewModel, onDismiss: () -> Unit) {
                                 text = { Text(if (sleepAt > 0) "Sleep timer (on)" else "Sleep timer") },
                                 onClick = { showMenu = false; showSleep = true },
                             )
+                            if (song.localUri == null) {
+                                DropdownMenuItem(
+                                    text = { Text("Download this song") },
+                                    onClick = {
+                                        showMenu = false
+                                        Downloads.download(context, listOf(song))
+                                        vm.toast("Downloading to Music/Music Tracker")
+                                    },
+                                )
+                            }
                             DropdownMenuItem(
                                 text = { Text("Start radio from this song") },
                                 onClick = { showMenu = false; vm.startSongRadio(song.title, song.artist) },

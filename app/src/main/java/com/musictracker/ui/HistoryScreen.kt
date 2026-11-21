@@ -21,6 +21,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.Box
+import com.musictracker.player.MusicPlayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.musictracker.data.PlayRow
@@ -40,7 +43,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.musictracker.data.Unidentified
 
 @Composable
-fun HistoryScreen(vm: MainViewModel, plays: List<PlayRow>, onOpenSong: (Long) -> Unit) {
+fun HistoryScreen(vm: MainViewModel, plays: List<PlayRow>, onOpenSong: (Long) -> Unit, onOpenPlayer: () -> Unit) {
+    val context = LocalContext.current
+    // Each song once, most recently heard first.
+    val uniqueSongs = remember(plays) { Stats.songs(plays, Range.ALL).sortedByDescending { it.lastPlayed }.toSongs() }
     val byDay = remember(plays) { plays.groupBy { Stats.day(it.startedAt) } }
     var toDelete by remember { mutableStateOf<PlayRow?>(null) }
     val unidentified by vm.unidentified.collectAsStateWithLifecycle()
@@ -75,6 +81,23 @@ fun HistoryScreen(vm: MainViewModel, plays: List<PlayRow>, onOpenSong: (Long) ->
                     onName = { naming = item },
                     onDismiss = { vm.dismissUnidentified(item) },
                 )
+            }
+        }
+        if (!showInbox && uniqueSongs.isNotEmpty()) {
+            item {
+                Box(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    ShufflePlayButtons(
+                        onShuffle = {
+                            MusicPlayer.play(context, uniqueSongs, uniqueSongs.indices.random(), shuffle = true)
+                            onOpenPlayer()
+                        },
+                        onPlay = {
+                            MusicPlayer.play(context, uniqueSongs)
+                            onOpenPlayer()
+                        },
+                        playLabel = "Play history",
+                    )
+                }
             }
         }
         if (!showInbox && plays.isEmpty()) {

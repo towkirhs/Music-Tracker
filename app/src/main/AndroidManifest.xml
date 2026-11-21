@@ -19,6 +19,9 @@
 
     <!-- One-time speech model download and optional Genius search. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- "On this phone": reading the phone's music files. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application

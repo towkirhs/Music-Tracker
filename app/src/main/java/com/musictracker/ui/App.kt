@@ -167,7 +167,7 @@ fun MusicTrackerApp(
                 )
                 Tab.LIBRARY -> LibraryScreen(plays, onOpenSong = { openSong = it }, onOpenPlayer = onOpenPlayer)
                 Tab.STATS -> StatsScreen(plays, onOpenSong = { openSong = it })
-                Tab.HISTORY -> HistoryScreen(vm, plays, onOpenSong = { openSong = it })
+                Tab.HISTORY -> HistoryScreen(vm, plays, onOpenSong = { openSong = it }, onOpenPlayer = onOpenPlayer)
                 Tab.SETTINGS -> SettingsScreen(vm, onRequestAudio = onRequestAudio)
             }
         }
