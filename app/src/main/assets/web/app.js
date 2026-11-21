@@ -60,6 +60,16 @@ let player;
 
 // ---------- Start ----------
 
+// Installing: browsers offer it only on https pages (the GitHub Pages address), not on the phone's Wi-Fi address.
+let installPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  installPrompt = e;
+  if (state.view === 'settings') rerender();
+});
+window.addEventListener('appinstalled', () => { installPrompt = null; toast('Installed'); });
+if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('sw.js').catch(() => {});
+
 async function start() {
   state.source = await connect();
   player = new Player(state.source, renderPlayer, toast);
@@ -72,8 +82,8 @@ async function start() {
     location.hash = '#/listen';
     runSearch(q);
   });
-  window.addEventListener('focus', () => state.source.mode === 'phone' && reload());
-  setInterval(() => state.source.mode === 'phone' && !document.hidden && reload(), 120_000);
+  window.addEventListener('focus', () => state.source.mode === 'phone' && reload({ quiet: true }));
+  setInterval(checkForChanges, 4000);
   setInterval(tick, 500);
   document.addEventListener('keydown', (e) => {
     if (e.target.matches('input, textarea, select')) return;
@@ -84,7 +94,7 @@ async function start() {
   route();
 }
 
-async function reload() {
+async function reload({ quiet = false } = {}) {
   try {
     state.lib = await state.source.library();
     state.loaded = true;
@@ -95,7 +105,28 @@ async function reload() {
     else state.loadError = e.message;
   }
   renderMode();
+  if (quiet) return renderKeepingPlace();
   render();
+}
+
+/** Redraws after a live update without moving what you are looking at. */
+function renderKeepingPlace() {
+  const main = $('#main');
+  const top = main.scrollTop;
+  const shelves = [...document.querySelectorAll('.shelf')].map((el) => el.scrollLeft);
+  render();
+  main.scrollTop = top;
+  document.querySelectorAll('.shelf').forEach((el, i) => { el.scrollLeft = shelves[i] || 0; });
+}
+
+/** Every few seconds: if the phone's library changed (a new song, an edit), fetch it again. */
+async function checkForChanges() {
+  if (state.source.mode !== 'phone' || document.hidden || state.needCode || !state.loaded) return;
+  // Not while you are typing or have a song open; the next check catches up.
+  if (!$('#dialog').hidden || document.activeElement?.matches('input, select, textarea')) return;
+  try {
+    if ((await state.source.version()) !== state.lib.version) await reload({ quiet: true });
+  } catch { /* phone asleep or off Wi-Fi; try again next time */ }
 }
 
 function route() {
@@ -537,6 +568,15 @@ function settings() {
        <label class="f">Last.fm username (optional)</label><input class="field" name="user" value="${esc(state.lib.lastFmUser)}">
        <button class="btn" style="margin-top:16px">Save</button></form>`}
     </div>
+    <div class="card" style="margin-top:16px"><h2 style="margin-top:0">Install</h2>
+      ${matchMedia('(display-mode: standalone)').matches
+    ? '<p class="muted">Installed. It opens in its own window and updates by itself.</p>'
+    : installPrompt
+      ? '<p class="muted">Add Music Tracker to your computer or phone like an app, with its own window and icon.</p><button class="btn" data-act="install">Install app</button>'
+      : window.isSecureContext
+        ? '<p class="muted">Use your browser menu: Install Music Tracker (Chrome, Edge) or Add to Home Screen (phone).</p>'
+        : '<p class="muted">Browsers only install websites from https addresses. Install it from <a href="https://towkirhs.github.io/Music-Tracker/" target="_blank" rel="noopener">towkirhs.github.io/Music-Tracker</a>; the Wi-Fi address keeps working in the browser.</p>'}
+    </div>
     <div class="card" style="margin-top:16px"><h2 style="margin-top:0">About</h2>
       <p class="muted">Music plays through YouTube's player. Lyrics come from LRCLIB, suggestions from Last.fm.
       Space bar plays and pauses.</p></div>
@@ -630,6 +670,13 @@ const actions = {
   'lib-unfilter': () => { state.library.filter = null; rerender(); },
   'stats-range': ({ range }) => { state.statsRange = range; rerender(); },
   'history-more': () => { state.historyShown += 300; rerender(); },
+  install: async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    await installPrompt.userChoice;
+    installPrompt = null;
+    rerender();
+  },
   'forget-code': () => { state.source.forgetCode(); state.needCode = true; rerender(); },
 };
 

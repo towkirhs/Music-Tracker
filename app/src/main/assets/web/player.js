@@ -29,6 +29,30 @@ export class Player {
     this.onChange = onChange;
     this.toast = toast;
     this.videoCache = new Map();
+    // How long the current song has really played, sent to the phone so it joins your library.
+    this.listen = null; // { song, startedAt, playedMs, playId, lastTick, sentMs }
+    setInterval(() => this.countListening(), 1000);
+  }
+
+  /** Adds up playing time each second and tells the phone every 5 seconds (from 10 seconds on). */
+  countListening() {
+    if (!this.source.recordPlay) return; // only when the phone serves this page
+    const song = this.current;
+    if (!song) return;
+    const now = Date.now();
+    if (!this.listen || this.listen.song !== song) {
+      this.listen = { song, startedAt: now, playedMs: 0, playId: 0, lastTick: now, sentMs: 0 };
+    }
+    const l = this.listen;
+    if (this.playing) l.playedMs += Math.min(now - l.lastTick, 2000);
+    l.lastTick = now;
+    if (l.playedMs < 10_000 || l.playedMs - l.sentMs < 5_000 || l.sending) return;
+    l.sending = true;
+    l.sentMs = l.playedMs;
+    this.source.recordPlay({ title: song.title, artist: song.artist || '', startedAt: l.startedAt, playedMs: l.playedMs, playId: l.playId })
+      .then((id) => { if (id) l.playId = id; })
+      .catch(() => {})
+      .finally(() => { l.sending = false; });
   }
 
   get current() { return this.queue[this.index] || null; }

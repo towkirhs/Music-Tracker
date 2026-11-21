@@ -54,6 +54,9 @@ class PhoneSource {
   }
 
   library() { return this.call('/library'); }
+  async version() { return (await this.call('/version')).version; }
+  /** Adds (or, with playId, updates) a play of a song heard on this website. Returns its playId, 0 if not counted. */
+  async recordPlay(play) { return (await this.call('/play/record', play)).playId || 0; }
   editTrack(id, title, artist, language) { return this.call('/track/edit', { id, title, artist, language }); }
   favourite(id, favourite) { return this.call('/track/favourite', { id, favourite }); }
   deleteTrack(id) { return this.call('/track/delete', { id }); }
