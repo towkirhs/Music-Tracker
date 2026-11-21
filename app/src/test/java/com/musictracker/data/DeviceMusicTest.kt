@@ -2,7 +2,12 @@ package com.musictracker.data
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class DeviceMusicTest {
     @Test fun taggedFileKeepsItsTags() =
         assertEquals("Kesariya" to "Arijit Singh", DeviceMusic.names("Kesariya", "Arijit Singh", "x.mp3"))
